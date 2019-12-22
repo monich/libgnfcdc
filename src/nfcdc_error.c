@@ -41,7 +41,7 @@
 
 static const GDBusErrorEntry nfcdc_errors[] = {
     #define NFCDC_ERROR_ENTRY(E,e) { \
-    NFCDC_ERROR_##E, "org.sailfishos.nfc.Error.." e },
+    NFCDC_ERROR_##E, "org.sailfishos.nfc.Error." e },
     NFCDC_ERRORS(NFCDC_ERROR_ENTRY)
     #undef NFCDC_ERROR_ENTRY
 };
