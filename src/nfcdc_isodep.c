@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2020 Jolla Ltd.
+ * Copyright (C) 2019-2020 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -307,15 +307,13 @@ nfc_isodep_client_init_1(
     NfcIsoDepClientObject* self = NFC_ISODEP_CLIENT_OBJECT(user_data);
     GError* error = NULL;
 
-    GASSERT(self->proxy_initializing);
     self->connection = g_bus_get_finish(result, &error);
     if (self->connection) {
         GDEBUG("Bus connected");
-        nfc_isodep_client_init_2(self);
+        nfc_isodep_client_update(self);
     } else {
         GERR("Failed to attach to NFC daemon bus: %s", GERRMSG(error));
         g_error_free(error);
-        self->proxy_initializing = FALSE;
         nfc_isodep_client_update_valid_and_present(self);
         nfc_isodep_client_emit_queued_signals(self);
     }
@@ -369,11 +367,10 @@ nfc_isodep_client_new(
                         NFC_TAG_PROPERTY_VALID,
                         nfc_isodep_client_tag_changed, obj);
                 obj->connection = nfc_tag_client_connection(obj->tag);
-                nfc_isodep_client_update(obj);
                 if (obj->connection) {
                     /* Already attached to the bus */
                     g_object_ref(obj->connection);
-                    nfc_isodep_client_init_2(obj);
+                    nfc_isodep_client_update(obj);
                 } else {
                     g_bus_get(NFCD_DBUS_TYPE, NULL, nfc_isodep_client_init_1,
                         g_object_ref(obj));
@@ -493,7 +490,6 @@ void
 nfc_isodep_client_object_init(
     NfcIsoDepClientObject* self)
 {
-    self->proxy_initializing = TRUE;
 }
 
 static
