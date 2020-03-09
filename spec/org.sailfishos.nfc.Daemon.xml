@@ -6,9 +6,11 @@
       <arg name="version" type="i" direction="out"/>
       <arg name="adapters" type="ao" direction="out"/>
     </method>
+    <!--
     <method name="GetInterfaceVersion">
       <arg name="version" type="i" direction="out"/>
     </method>
+    -->
     <method name="GetAdapters">
       <arg name="adapters" type="ao" direction="out"/>
     </method>

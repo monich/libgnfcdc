@@ -6,9 +6,11 @@
     <method name="GetAll">
       <arg name="version" type="i" direction="out"/>
     </method>
+    <!--
     <method name="GetInterfaceVersion">
       <arg name="version" type="i" direction="out"/>
     </method>
+    -->
     <method name="Transmit">
       <arg name="CLA" type="y" direction="in"/>
       <arg name="INS" type="y" direction="in"/>

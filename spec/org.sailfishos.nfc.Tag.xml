@@ -31,6 +31,7 @@
       <arg name="interfaces" type="as" direction="out"/>
       <arg name="ndef_records" type="ao" direction="out"/>
     </method>
+    <!--
     <method name="GetInterfaceVersion">
       <arg name="version" type="i" direction="out"/>
     </method>
@@ -53,6 +54,7 @@
       <arg name="ndef_records" type="ao" direction="out"/>
     </method>
     <method name="Deactivate"/>
+    -->
     <!-- Interface version 2 -->
     <signal name="Removed"/>
     <method name="Acquire">
