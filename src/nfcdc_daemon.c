@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2020 Jolla Ltd.
+ * Copyright (C) 2019-2020 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -218,12 +218,52 @@ nfc_daemon_client_new_daemon_done(
     NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
     OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
     GError* error = NULL;
+    gint version = 0;
+
+    GASSERT(!self->daemon);
+    GASSERT(self->daemon_adapters_changed_id);
+    if (org_sailfishos_nfc_daemon_call_get_daemon_version_finish(daemon,
+        &version, result, &error)) {
+        NfcDaemonClient* pub = &self->pub;
+
+        GDEBUG("NFC daemon version %d.%d.%d",
+            NFC_DAEMON_VERSION_MAJOR(version),
+            NFC_DAEMON_VERSION_MINOR(version),
+            NFC_DAEMON_VERSION_NANO(version));
+        if (pub->version != version) {
+            pub->version = version;
+            nfc_daemon_client_queue_signal_(self, VERSION);
+        }
+        self->daemon = daemon;
+    } else {
+        GERR("Failed to query NFC daemon version: %s", GERRMSG(error));
+        nfc_daemon_client_set_daemon_error(self, error);
+        gutil_disconnect_handlers(self->daemon,
+            &self->daemon_adapters_changed_id, 1);
+        g_object_unref(daemon);
+    }
+    nfc_daemon_client_update_valid_and_present(self);
+    nfc_daemon_client_emit_queued_signals(self);
+    g_object_unref(self);
+}
+
+static
+void
+nfc_daemon_client_daemon_get_all_done(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
+    GError* error = NULL;
+    gint iface_version = 0;
     char** adapters = NULL;
 
     GASSERT(!self->daemon);
     GASSERT(self->daemon_adapters_changed_id);
-    if (org_sailfishos_nfc_daemon_call_get_adapters_finish(daemon,
-        &adapters, result, &error)) {
+    if (org_sailfishos_nfc_daemon_call_get_all_finish(daemon,
+        &iface_version, &adapters, result, &error)) {
         NfcDaemonClient* pub = &self->pub;
 
         if (!gutil_strv_equal(self->adapters, adapters)) {
@@ -233,9 +273,19 @@ nfc_daemon_client_new_daemon_done(
         } else {
             g_strfreev(adapters);
         }
-        self->daemon = daemon;
+        GDEBUG("NFC daemon interface version %d", iface_version);
+        if (iface_version < 2) {
+            if (pub->version) {
+                pub->version = 0;
+                nfc_daemon_client_queue_signal_(self, VERSION);
+            }
+            self->daemon = daemon;
+        } else {
+            org_sailfishos_nfc_daemon_call_get_daemon_version(daemon, NULL,
+                nfc_daemon_client_new_daemon_done, g_object_ref(self));
+        }
     } else {
-        GERR("Failed to query NFC adapters: %s", GERRMSG(error));
+        GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
         nfc_daemon_client_set_daemon_error(self, error);
         gutil_disconnect_handlers(self->daemon,
             &self->daemon_adapters_changed_id, 1);
@@ -263,8 +313,8 @@ nfc_daemon_client_new_daemon(
         self->daemon_adapters_changed_id =
             g_signal_connect(daemon, "adapters-changed",
                 G_CALLBACK(nfc_daemon_client_daemon_adapters_changed), self);
-        org_sailfishos_nfc_daemon_call_get_adapters(daemon, NULL,
-            nfc_daemon_client_new_daemon_done, g_object_ref(self));
+        org_sailfishos_nfc_daemon_call_get_all(daemon, NULL,
+            nfc_daemon_client_daemon_get_all_done, g_object_ref(self));
     } else {
         GERR("Failed to attach to NFC daemon: %s", GERRMSG(error));
         nfc_daemon_client_set_daemon_error(self, error);
