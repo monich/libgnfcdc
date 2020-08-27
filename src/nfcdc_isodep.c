@@ -11,8 +11,8 @@
  *   1. Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
+ *      notice, this list of conditions and the following disclaimer
+ *      in the documentation and/or other materials provided with the
  *      distribution.
  *   3. Neither the names of the copyright holders nor the names of its
  *      contributors may be used to endorse or promote products derived
@@ -130,7 +130,7 @@ nfc_isodep_client_transmit_done(
     org_sailfishos_nfc_iso_dep_call_transmit_finish(ORG_SAILFISHOS_NFC_ISO_DEP
         (proxy), &response, &sw1, &sw2, result, &error);
     if (data->cancel) {
-        g_cancellable_disconnect(data->cancel, data->cancel_id);
+        g_signal_handler_disconnect(data->cancel, data->cancel_id);
         g_object_unref(data->cancel);
     }
     if (data->callback) {
