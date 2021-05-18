@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2021 Jolla Ltd.
+ * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -44,22 +44,29 @@
 #include <gutil_misc.h>
 #include <gutil_strv.h>
 
+enum nfc_default_adapter_daemon_signals {
+    DAEMON_VALID_CHANGED,
+    DAEMON_ADAPTERS_CHANGED,
+    DAEMON_SIGNAL_COUNT
+};
+
 typedef NfcClientBaseClass NfcDefaultAdapterObjectClass;
 typedef struct nfc_default_adapter_object {
     NfcClientBase base;
     NfcDefaultAdapter pub;
     NfcDaemonClient* daemon;
     NfcAdapterClient* adapter;
-    gulong daemon_adapters_id;
+    gulong daemon_event_id[DAEMON_SIGNAL_COUNT];
     gulong adapter_signal_id;
     GStrV* tags;
 } NfcDefaultAdapterObject;
 
 G_DEFINE_TYPE(NfcDefaultAdapterObject, nfc_default_adapter_object, \
-        NFC_CLIENT_TYPE_BASE)
-#define NFC_CLIENT_TYPE_DEFAULT_ADAPTER (nfc_default_adapter_object_get_type())
-#define NFC_DEFAULT_ADAPTER_OBJECT(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
-	NFC_CLIENT_TYPE_DEFAULT_ADAPTER, NfcDefaultAdapterObject))
+    NFC_CLIENT_TYPE_BASE)
+#define PARENT_CLASS nfc_default_adapter_object_parent_class
+#define THIS_TYPE (nfc_default_adapter_object_get_type())
+#define THIS(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
+    THIS_TYPE, NfcDefaultAdapterObject))
 
 NFC_CLIENT_BASE_ASSERT_COUNT(NFC_DEFAULT_ADAPTER_PROPERTY_COUNT);
 
@@ -84,7 +91,7 @@ nfc_default_adapter_object_cast(
     NfcDefaultAdapter* pub)
 {
     return G_LIKELY(pub) ?
-        NFC_DEFAULT_ADAPTER_OBJECT(G_CAST(pub, NfcDefaultAdapterObject, pub)) :
+        THIS(G_CAST(pub, NfcDefaultAdapterObject, pub)) :
         NULL;
 }
 
@@ -196,7 +203,7 @@ nfc_default_adapter_property_changed(
     NFC_ADAPTER_PROPERTY property,
     void* user_data)
 {
-    NfcDefaultAdapterObject* self = NFC_DEFAULT_ADAPTER_OBJECT(user_data);
+    NfcDefaultAdapterObject* self = THIS(user_data);
 
     nfc_default_adapter_sync(self);
     nfc_default_adapter_emit_queued_signals(self);
@@ -227,12 +234,27 @@ nfc_default_adapter_check(
 
 static
 void
+nfc_default_adapter_daemon_valid_changed(
+    NfcDaemonClient* daemon,
+    NFC_DAEMON_PROPERTY property,
+    void* user_data)
+{
+    NfcDefaultAdapterObject* self = THIS(user_data);
+    NfcDefaultAdapter* pub = &self->pub;
+
+    pub->valid = daemon->valid;
+    nfc_default_adapter_queue_signal(self, VALID);
+    nfc_default_adapter_emit_queued_signals(self);
+}
+
+static
+void
 nfc_default_adapter_daemon_adapters_changed(
     NfcDaemonClient* daemon,
     NFC_DAEMON_PROPERTY property,
     void* user_data)
 {
-    NfcDefaultAdapterObject* self = NFC_DEFAULT_ADAPTER_OBJECT(user_data);
+    NfcDefaultAdapterObject* self = THIS(user_data);
 
     nfc_default_adapter_check(self);
     nfc_default_adapter_emit_queued_signals(self);
@@ -248,8 +270,7 @@ nfc_default_adapter_new()
     if (nfc_default_adapter_instance) {
         g_object_ref(nfc_default_adapter_instance);
     } else {
-        nfc_default_adapter_instance = g_object_new
-            (NFC_CLIENT_TYPE_DEFAULT_ADAPTER, NULL);
+        nfc_default_adapter_instance = g_object_new(THIS_TYPE, NULL);
     }
     return &nfc_default_adapter_instance->pub;
 }
@@ -325,10 +346,15 @@ nfc_default_adapter_object_init(
     GVERBOSE_("");
     pub->tags = &nfc_default_adapter_empty_strv;
     self->daemon = nfc_daemon_client_new();
-    self->daemon_adapters_id =
+    self->daemon_event_id[DAEMON_VALID_CHANGED] =
+        nfc_daemon_client_add_property_handler(self->daemon,
+            NFC_DAEMON_PROPERTY_VALID,
+            nfc_default_adapter_daemon_valid_changed, self);
+    self->daemon_event_id[DAEMON_ADAPTERS_CHANGED] =
         nfc_daemon_client_add_property_handler(self->daemon,
             NFC_DAEMON_PROPERTY_ADAPTERS,
             nfc_default_adapter_daemon_adapters_changed, self);
+    pub->valid = self->daemon->valid;
     nfc_default_adapter_check(self);
 }
 
@@ -337,16 +363,16 @@ void
 nfc_default_adapter_object_finalize(
     GObject* object)
 {
-    NfcDefaultAdapterObject* self = NFC_DEFAULT_ADAPTER_OBJECT(object);
+    NfcDefaultAdapterObject* self = THIS(object);
 
     GVERBOSE_("");
     GASSERT(nfc_default_adapter_instance == self);
     nfc_default_adapter_instance = NULL;
     nfc_default_adapter_drop_adapter(self);
-    nfc_daemon_client_remove_handler(self->daemon, self->daemon_adapters_id);
+    nfc_daemon_client_remove_all_handlers(self->daemon, self->daemon_event_id);
     nfc_daemon_client_unref(self->daemon);
     g_strfreev(self->tags);
-    G_OBJECT_CLASS(nfc_default_adapter_object_parent_class)->finalize(object);
+    G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }
 
 static
