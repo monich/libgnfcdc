@@ -53,7 +53,7 @@ typedef struct nfc_client_base_closure {
 #define nfc_client_base_closure_new() ((NfcClientBaseClosure *) \
     g_closure_new_simple(sizeof(NfcClientBaseClosure), NULL))
 
-#define SIGNAL_PROPERTY_CHANGED_NAME    "bluez-base-property-changed"
+#define SIGNAL_PROPERTY_CHANGED_NAME    "nfcdc-base-property-changed"
 #define SIGNAL_PROPERTY_DETAIL          "%x"
 #define SIGNAL_PROPERTY_DETAIL_MAX_LEN  (8)
 
