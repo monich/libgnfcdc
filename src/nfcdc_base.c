@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2021 Jolla Ltd.
+ * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -39,8 +39,6 @@
 #include "nfcdc_log.h"
 
 G_DEFINE_ABSTRACT_TYPE(NfcClientBase, nfc_client_base, G_TYPE_OBJECT)
-#define NFC_CLIENT_BASE(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
-	NFC_CLIENT_TYPE_BASE, NfcClientBase))
 #define NFC_CLIENT_BASE_GET_CLASS(obj) G_TYPE_INSTANCE_GET_CLASS((obj), \
         NFC_CLIENT_TYPE_BASE, NfcClientBaseClass)
 
