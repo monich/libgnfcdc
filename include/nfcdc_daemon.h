@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019-2020 Jolla Ltd.
- * Copyright (C) 2019-2020 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2021 Jolla Ltd.
+ * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -11,8 +11,8 @@
  *   1. Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
+ *      notice, this list of conditions and the following disclaimer
+ *      in the documentation and/or other materials provided with the
  *      distribution.
  *   3. Neither the names of the copyright holders nor the names of its
  *      contributors may be used to endorse or promote products derived
@@ -51,6 +51,8 @@ typedef enum nfc_daemon_property {
     NFC_DAEMON_PROPERTY_ADAPTERS,
     /* Since 1.0.3 */
     NFC_DAEMON_PROPERTY_VERSION,
+    /* Since 1.0.6 */
+    NFC_DAEMON_PROPERTY_MODE,
     NFC_DAEMON_PROPERTY_COUNT
 } NFC_DAEMON_PROPERTY;
 
@@ -62,6 +64,8 @@ struct nfc_daemon_client {
     const GStrV* adapters;
     /* Since 1.0.3 */
     int version; /* Zero for nfcd versions < 1.0.26 */
+    /* Since 1.0.6 */
+    NFCD_MODE mode; /* Zero for nfcd versions < 1.1.0 */
 };
 
 #define NFC_DAEMON_VERSION(v1,v2,v3) \

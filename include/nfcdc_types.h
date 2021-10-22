@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2021 Jolla Ltd.
+ * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -11,8 +11,8 @@
  *   1. Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
+ *      notice, this list of conditions and the following disclaimer
+ *      in the documentation and/or other materials provided with the
  *      distribution.
  *   3. Neither the names of the copyright holders nor the names of its
  *      contributors may be used to endorse or promote products derived
@@ -49,6 +49,16 @@ typedef struct nfc_daemon_client NfcDaemonClient;
 typedef struct nfc_default_adapter NfcDefaultAdapter;
 typedef struct nfc_isodep_client NfcIsoDepClient;
 typedef struct nfc_tag_client NfcTagClient;
+
+typedef enum nfc_daemon_mode {
+    NFCD_MODE_NONE           = 0x00,
+    /* Polling */
+    NFCD_MODE_P2P_INITIATOR  = 0x01,
+    NFCD_MODE_READER_WRITER  = 0x02,
+    /* Listening */
+    NFCD_MODE_P2P_TARGET     = 0x04,
+    NFCD_MODE_CARD_EMILATION = 0x08
+} NFCD_MODE; /* Since 1.0.6 */
 
 extern GLogModule NFCDC_LOG_MODULE;
 

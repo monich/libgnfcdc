@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019-2020 Jolla Ltd.
- * Copyright (C) 2019-2020 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2021 Jolla Ltd.
+ * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -11,8 +11,8 @@
  *   1. Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
+ *      notice, this list of conditions and the following disclaimer
+ *      in the documentation and/or other materials provided with the
  *      distribution.
  *   3. Neither the names of the copyright holders nor the names of its
  *      contributors may be used to endorse or promote products derived
@@ -74,9 +74,10 @@ typedef struct nfc_daemon_client_object {
 
 G_DEFINE_TYPE(NfcDaemonClientObject, nfc_daemon_client_object, \
         NFC_CLIENT_TYPE_BASE)
-#define NFC_CLIENT_TYPE_DAEMON (nfc_daemon_client_object_get_type())
-#define NFC_DAEMON_CLIENT_OBJECT(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
-	NFC_CLIENT_TYPE_DAEMON, NfcDaemonClientObject))
+#define PARENT_CLASS nfc_daemon_client_object_parent_class
+#define THIS_TYPE nfc_daemon_client_object_get_type()
+#define THIS(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
+    THIS_TYPE, NfcDaemonClientObject))
 
 NFC_CLIENT_BASE_ASSERT_VALID(NFC_DAEMON_PROPERTY_VALID);
 NFC_CLIENT_BASE_ASSERT_COUNT(NFC_DAEMON_PROPERTY_COUNT);
@@ -103,7 +104,7 @@ nfc_daemon_client_object_cast(
     NfcDaemonClient* pub)
 {
     return G_LIKELY(pub) ?
-        NFC_DAEMON_CLIENT_OBJECT(G_CAST(pub, NfcDaemonClientObject, pub)) :
+        THIS(G_CAST(pub, NfcDaemonClientObject, pub)) :
         NULL;
 }
 
@@ -210,33 +211,114 @@ nfc_daemon_client_daemon_adapters_changed(
 
 static
 void
-nfc_daemon_client_new_daemon_done(
+nfc_daemon_client_daemon_set_version(
+    NfcDaemonClientObject* self,
+    int version)
+{
+    NfcDaemonClient* pub = &self->pub;
+
+    GDEBUG("NFC daemon version %d.%d.%d",
+        NFC_DAEMON_VERSION_MAJOR(version),
+        NFC_DAEMON_VERSION_MINOR(version),
+        NFC_DAEMON_VERSION_NANO(version));
+    if (pub->version != version) {
+        pub->version = version;
+        nfc_daemon_client_queue_signal_(self, VERSION);
+    }
+}
+
+static
+void
+nfc_daemon_client_daemon_set_adapters(
+    NfcDaemonClientObject* self,
+    char** adapters)
+{
+    NfcDaemonClient* pub = &self->pub;
+
+    if (!gutil_strv_equal(self->adapters, adapters)) {
+        g_strfreev(self->adapters);
+        pub->adapters = self->adapters = adapters;
+        nfc_daemon_client_queue_signal_(self, ADAPTERS);
+    } else {
+        g_strfreev(adapters);
+    }
+}
+
+static
+void
+nfc_daemon_client_daemon_set_mode(
+    NfcDaemonClientObject* self,
+    NFCD_MODE mode)
+{
+    NfcDaemonClient* pub = &self->pub;
+
+    GDEBUG("NFC mode %02x", mode);
+    if (pub->mode != mode) {
+        pub->mode = mode;
+        nfc_daemon_client_queue_signal_(self, MODE);
+    }
+}
+
+static
+void
+nfc_daemon_client_daemon_get_all3_done(
     GObject* proxy,
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
     OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
     GError* error = NULL;
+    gint iface_version = 0;
+    char** adapters = NULL;
+    gint version = 0;
+    guint mode = 0;
+
+    GASSERT(!self->daemon);
+    GASSERT(self->daemon_adapters_changed_id);
+    if (org_sailfishos_nfc_daemon_call_get_all3_finish(daemon,
+        &iface_version, &adapters, &version, &mode, result, &error)) {
+        GASSERT(iface_version >= 3);
+        nfc_daemon_client_daemon_set_version(self, version);
+        nfc_daemon_client_daemon_set_adapters(self, adapters);
+        nfc_daemon_client_daemon_set_mode(self, mode);
+        self->daemon = daemon;
+    } else {
+        GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
+        nfc_daemon_client_set_daemon_error(self, error);
+        gutil_disconnect_handlers(self->daemon,
+            &self->daemon_adapters_changed_id, 1);
+        g_object_unref(daemon);
+    }
+    nfc_daemon_client_update_valid_and_present(self);
+    nfc_daemon_client_emit_queued_signals(self);
+    g_object_unref(self);
+}
+
+static
+void
+nfc_daemon_client_daemon_get_all2_done(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcDaemonClientObject* self = THIS(user_data);
+    OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
+    GError* error = NULL;
+    gint iface_version = 0;
+    char** adapters = NULL;
     gint version = 0;
 
     GASSERT(!self->daemon);
     GASSERT(self->daemon_adapters_changed_id);
-    if (org_sailfishos_nfc_daemon_call_get_daemon_version_finish(daemon,
-        &version, result, &error)) {
-        NfcDaemonClient* pub = &self->pub;
-
-        GDEBUG("NFC daemon version %d.%d.%d",
-            NFC_DAEMON_VERSION_MAJOR(version),
-            NFC_DAEMON_VERSION_MINOR(version),
-            NFC_DAEMON_VERSION_NANO(version));
-        if (pub->version != version) {
-            pub->version = version;
-            nfc_daemon_client_queue_signal_(self, VERSION);
-        }
+    if (org_sailfishos_nfc_daemon_call_get_all2_finish(daemon,
+        &iface_version, &adapters, &version, result, &error)) {
+        GASSERT(iface_version == 2);
+        nfc_daemon_client_daemon_set_version(self, version);
+        nfc_daemon_client_daemon_set_adapters(self, adapters);
         self->daemon = daemon;
     } else {
-        GERR("Failed to query NFC daemon version: %s", GERRMSG(error));
+        GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
         nfc_daemon_client_set_daemon_error(self, error);
         gutil_disconnect_handlers(self->daemon,
             &self->daemon_adapters_changed_id, 1);
@@ -254,7 +336,7 @@ nfc_daemon_client_daemon_get_all_done(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
     OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
     GError* error = NULL;
     gint iface_version = 0;
@@ -266,23 +348,20 @@ nfc_daemon_client_daemon_get_all_done(
         &iface_version, &adapters, result, &error)) {
         NfcDaemonClient* pub = &self->pub;
 
-        if (!gutil_strv_equal(self->adapters, adapters)) {
-            g_strfreev(self->adapters);
-            pub->adapters = self->adapters = adapters;
-            nfc_daemon_client_queue_signal_(self, ADAPTERS);
-        } else {
-            g_strfreev(adapters);
-        }
         GDEBUG("NFC daemon interface version %d", iface_version);
-        if (iface_version < 2) {
+        nfc_daemon_client_daemon_set_adapters(self, adapters);
+        if (iface_version >= 3) {
+            org_sailfishos_nfc_daemon_call_get_all3(daemon, NULL,
+                nfc_daemon_client_daemon_get_all3_done, g_object_ref(self));
+        } else if (iface_version == 2) {
+            org_sailfishos_nfc_daemon_call_get_all2(daemon, NULL,
+                nfc_daemon_client_daemon_get_all2_done, g_object_ref(self));
+        } else {
             if (pub->version) {
                 pub->version = 0;
                 nfc_daemon_client_queue_signal_(self, VERSION);
             }
             self->daemon = daemon;
-        } else {
-            org_sailfishos_nfc_daemon_call_get_daemon_version(daemon, NULL,
-                nfc_daemon_client_new_daemon_done, g_object_ref(self));
         }
     } else {
         GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
@@ -303,7 +382,7 @@ nfc_daemon_client_new_daemon(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
     GError* error = NULL;
     OrgSailfishosNfcDaemon* daemon =
         org_sailfishos_nfc_daemon_proxy_new_finish(result, &error);
@@ -350,7 +429,7 @@ nfc_daemon_client_new_settings_done(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
     OrgSailfishosNfcSettings* settings = ORG_SAILFISHOS_NFC_SETTINGS(proxy);
     GError* error = NULL;
     gboolean enabled;
@@ -385,7 +464,7 @@ nfc_daemon_client_new_settings(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
     GError* error = NULL;
     OrgSailfishosNfcSettings* settings =
         org_sailfishos_nfc_settings_proxy_new_finish(result, &error);
@@ -433,6 +512,14 @@ nfc_daemon_client_drop_daemon_proxy(
         pub->adapters = &nfc_daemon_client_empty_strv;
         nfc_daemon_client_queue_signal_(self, ADAPTERS);
     }
+    if (pub->version) {
+        pub->adapters = 0;
+        nfc_daemon_client_queue_signal_(self, VERSION);
+    }
+    if (pub->mode != NFCD_MODE_NONE) {
+        pub->mode = NFCD_MODE_NONE;
+        nfc_daemon_client_queue_signal_(self, MODE);
+    }
 }
 
 static
@@ -462,7 +549,7 @@ nfc_daemon_client_daemon_appeared(
     const gchar* owner,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
 
     GDEBUG("Name '%s' is owned by %s", name, owner);
     GASSERT(!self->daemon);
@@ -485,7 +572,7 @@ nfc_daemon_client_daemon_vanished(
     const gchar* name,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
 
     if (self->daemon_present) {
         GDEBUG("Name '%s' has disappeared", name);
@@ -507,7 +594,7 @@ nfc_daemon_client_settings_appeared(
     const gchar* owner,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
 
     GDEBUG("Name '%s' is owned by %s", name, owner);
     GASSERT(!self->settings);
@@ -530,7 +617,7 @@ nfc_daemon_client_settings_vanished(
     const gchar* name,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
 
     if (self->settings_present) {
         GDEBUG("Name '%s' has disappeared", name);
@@ -551,7 +638,7 @@ nfc_daemon_client_new_bus(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(user_data);
+    NfcDaemonClientObject* self = THIS(user_data);
     GError* error = NULL;
 
     self->connection = g_bus_get_finish(result, &error);
@@ -603,7 +690,7 @@ nfc_daemon_client_new(
         g_object_ref(nfc_daemon_client_instance);
     } else {
         /* Start the initialization sequence */
-        nfc_daemon_client_instance = g_object_new(NFC_CLIENT_TYPE_DAEMON, NULL);
+        nfc_daemon_client_instance = g_object_new(THIS_TYPE, NULL);
         g_bus_get(NFCD_DBUS_TYPE, NULL, nfc_daemon_client_new_bus,
             g_object_ref(nfc_daemon_client_instance));
     }
@@ -687,7 +774,7 @@ void
 nfc_daemon_client_object_finalize(
     GObject* object)
 {
-    NfcDaemonClientObject* self = NFC_DAEMON_CLIENT_OBJECT(object);
+    NfcDaemonClientObject* self = THIS(object);
 
     GVERBOSE_("");
     GASSERT(nfc_daemon_client_instance == self);
@@ -700,7 +787,7 @@ nfc_daemon_client_object_finalize(
         g_object_unref(self->connection);
     }
     g_strfreev(self->adapters);
-    G_OBJECT_CLASS(nfc_daemon_client_object_parent_class)->finalize(object);
+    G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }
 
 static
