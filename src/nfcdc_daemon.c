@@ -203,7 +203,8 @@ nfc_daemon_client_daemon_adapters_changed(
 
         DUMP_STRV(NULL, "Adapters", "=", adapters);
         g_strfreev(self->adapters);
-        pub->adapters = self->adapters = g_strdupv(adapters);
+        pub->adapters = (self->adapters = g_strdupv(adapters)) ?
+            self->adapters : &nfc_daemon_client_empty_strv;
         nfc_daemon_client_queue_signal_(self, ADAPTERS);
         nfc_daemon_client_emit_queued_signals(self);
     }
@@ -237,7 +238,8 @@ nfc_daemon_client_daemon_set_adapters(
 
     if (!gutil_strv_equal(self->adapters, adapters)) {
         g_strfreev(self->adapters);
-        pub->adapters = self->adapters = adapters;
+        pub->adapters = (self->adapters = g_strdupv(adapters)) ?
+            self->adapters : &nfc_daemon_client_empty_strv;
         nfc_daemon_client_queue_signal_(self, ADAPTERS);
     } else {
         g_strfreev(adapters);
@@ -513,7 +515,7 @@ nfc_daemon_client_drop_daemon_proxy(
         nfc_daemon_client_queue_signal_(self, ADAPTERS);
     }
     if (pub->version) {
-        pub->adapters = 0;
+        pub->version = 0;
         nfc_daemon_client_queue_signal_(self, VERSION);
     }
     if (pub->mode != NFCD_MODE_NONE) {
