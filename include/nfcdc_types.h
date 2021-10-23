@@ -48,6 +48,7 @@ typedef struct nfc_adapter_client NfcAdapterClient;
 typedef struct nfc_daemon_client NfcDaemonClient;
 typedef struct nfc_default_adapter NfcDefaultAdapter;
 typedef struct nfc_isodep_client NfcIsoDepClient;
+typedef struct nfc_mode_request NfcModeRequest; /* Since 1.0.6 */
 typedef struct nfc_tag_client NfcTagClient;
 
 typedef enum nfc_daemon_mode {

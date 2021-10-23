@@ -117,6 +117,23 @@ nfc_daemon_client_remove_handlers(
 #define nfc_daemon_client_remove_all_handlers(daemon, ids) \
     nfc_daemon_client_remove_handlers(daemon, ids, G_N_ELEMENTS(ids))
 
+/* NfcModeRequest */
+
+struct nfc_mode_request {
+    NFCD_MODE enable;
+    NFCD_MODE disable;
+};
+
+NfcModeRequest*
+nfc_mode_request_new(
+    NfcDaemonClient* daemon,
+    NFCD_MODE enable,
+    NFCD_MODE disable);  /* Since 1.0.6 */
+
+void
+nfc_mode_request_free(
+    NfcModeRequest* request);  /* Since 1.0.6 */
+
 G_END_DECLS
 
 #endif /* NFCDC_DAEMON_H */
