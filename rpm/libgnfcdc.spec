@@ -7,8 +7,11 @@ Group: Development/Libraries
 License: BSD
 URL: https://github.com/monich/libgnfcdc
 Source: %{name}-%{version}.tar.bz2
-BuildRequires:  pkgconfig(glib-2.0)
-BuildRequires:  pkgconfig(libglibutil)
+
+BuildRequires: pkgconfig
+BuildRequires: pkgconfig(glib-2.0)
+BuildRequires: pkgconfig(libglibutil)
+
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
@@ -18,7 +21,6 @@ Glib based API for nfcd D-Bus interface.
 %package devel
 Summary: Development library for %{name}
 Requires: %{name} = %{version}
-Requires: pkgconfig
 
 %description devel
 This package contains the development library for %{name}.
