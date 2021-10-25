@@ -659,42 +659,6 @@ nfc_daemon_client_settings_vanished(
     nfc_daemon_client_emit_queued_signals(self);
 }
 
-static
-void
-nfc_daemon_client_new_bus(
-    GObject* object,
-    GAsyncResult* result,
-    gpointer user_data)
-{
-    NfcDaemonClientObject* self = THIS(user_data);
-    GError* error = NULL;
-
-    self->connection = g_bus_get_finish(result, &error);
-    if (self->connection) {
-        GDEBUG("Bus connected");
-        self->daemon_watch_initializing = TRUE;
-        self->daemon_watch_id =
-            g_bus_watch_name_on_connection(self->connection,
-                NFCD_DBUS_DAEMON_NAME, G_BUS_NAME_WATCHER_FLAGS_NONE,
-                nfc_daemon_client_daemon_appeared,
-                nfc_daemon_client_daemon_vanished,
-                self, NULL);
-        self->settings_watch_initializing = TRUE;
-        self->settings_watch_id =
-            g_bus_watch_name_on_connection(self->connection,
-                NFCD_DBUS_SETTINGS_NAME, G_BUS_NAME_WATCHER_FLAGS_NONE,
-                nfc_daemon_client_settings_appeared,
-                nfc_daemon_client_settings_vanished,
-                self, NULL);
-    } else {
-        GERR("Failed to attach to NFC daemon bus: %s", GERRMSG(error));
-        nfc_daemon_client_set_daemon_error(self, error);
-    }
-    nfc_daemon_client_update_valid_and_present(self);
-    nfc_daemon_client_emit_queued_signals(self);
-    g_object_unref(self);
-}
-
 /*==========================================================================*
  * NfcModeRequestImpl
  *==========================================================================*/
@@ -856,10 +820,37 @@ nfc_daemon_client_new(
     if (nfc_daemon_client_instance) {
         g_object_ref(nfc_daemon_client_instance);
     } else {
-        /* Start the initialization sequence */
-        nfc_daemon_client_instance = g_object_new(THIS_TYPE, NULL);
-        g_bus_get(NFCD_DBUS_TYPE, NULL, nfc_daemon_client_new_bus,
-            g_object_ref(nfc_daemon_client_instance));
+        GError* error = NULL;
+        NfcDaemonClientObject* self = g_object_new(THIS_TYPE, NULL);
+
+        /* Acquire the bus synchronously */
+        self->connection = g_bus_get_sync(NFCD_DBUS_TYPE, NULL, &error);
+        if (self->connection) {
+            GDEBUG("Bus connected");
+            self->daemon_watch_initializing = TRUE;
+            self->daemon_watch_id =
+                g_bus_watch_name_on_connection(self->connection,
+                    NFCD_DBUS_DAEMON_NAME, G_BUS_NAME_WATCHER_FLAGS_NONE,
+                    nfc_daemon_client_daemon_appeared,
+                    nfc_daemon_client_daemon_vanished,
+                    self, NULL);
+            self->settings_watch_initializing = TRUE;
+            self->settings_watch_id =
+                g_bus_watch_name_on_connection(self->connection,
+                    NFCD_DBUS_SETTINGS_NAME, G_BUS_NAME_WATCHER_FLAGS_NONE,
+                    nfc_daemon_client_settings_appeared,
+                    nfc_daemon_client_settings_vanished,
+                    self, NULL);
+        } else {
+            GERR("Failed to attach to NFC daemon bus: %s", GERRMSG(error));
+            nfc_daemon_client_set_daemon_error(self, error);
+        }
+        nfc_daemon_client_update_valid_and_present(self);
+
+        /* Clear pending signals since no one is listening yet */
+        self->base.queued_signals = 0;
+
+        nfc_daemon_client_instance = self;
     }
     return &nfc_daemon_client_instance->pub;
 }
