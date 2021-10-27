@@ -59,6 +59,7 @@ typedef struct nfc_default_adapter_object {
     gulong daemon_event_id[DAEMON_SIGNAL_COUNT];
     gulong adapter_signal_id;
     GStrV* tags;
+    GStrV* peers;
 } NfcDefaultAdapterObject;
 
 G_DEFINE_TYPE(NfcDefaultAdapterObject, nfc_default_adapter_object, \
@@ -128,11 +129,11 @@ nfc_default_adapter_clear(
         nfc_default_adapter_queue_signal(self, POWERED);
     }
     if (pub->supported_modes) {
-        pub->supported_modes = NFC_ADAPTER_MODE_NONE;
+        pub->supported_modes = NFC_MODE_NONE;
         nfc_default_adapter_queue_signal(self, SUPPORTED_MODES);
     }
     if (pub->mode) {
-        pub->mode = NFC_ADAPTER_MODE_NONE;
+        pub->mode = NFC_MODE_NONE;
         nfc_default_adapter_queue_signal(self, MODE);
     }
     if (pub->target_present) {
@@ -144,6 +145,12 @@ nfc_default_adapter_clear(
         self->tags = NULL;
         pub->tags = &nfc_default_adapter_empty_strv;
         nfc_default_adapter_queue_signal(self, TAGS);
+    }
+    if (pub->peers[0]) {
+        g_strfreev(self->peers);
+        self->peers = NULL;
+        pub->peers = &nfc_default_adapter_empty_strv;
+        nfc_default_adapter_queue_signal(self, PEERS);
     }
 }
 
@@ -193,6 +200,16 @@ nfc_default_adapter_sync(
             pub->tags = &nfc_default_adapter_empty_strv;
         }
         nfc_default_adapter_queue_signal(self, TAGS);
+    }
+    if (!gutil_strv_equal(pub->peers, adapter->peers)) {
+        g_strfreev(self->peers);
+        if (adapter->peers[0]) {
+            pub->peers = self->peers = g_strdupv((char**)adapter->peers);
+        } else {
+            self->peers = NULL;
+            pub->peers = &nfc_default_adapter_empty_strv;
+        }
+        nfc_default_adapter_queue_signal(self, PEERS);
     }
 }
 
@@ -345,6 +362,7 @@ nfc_default_adapter_object_init(
 
     GVERBOSE_("");
     pub->tags = &nfc_default_adapter_empty_strv;
+    pub->peers = &nfc_default_adapter_empty_strv;
     self->daemon = nfc_daemon_client_new();
     self->daemon_event_id[DAEMON_VALID_CHANGED] =
         nfc_daemon_client_add_property_handler(self->daemon,
@@ -372,6 +390,7 @@ nfc_default_adapter_object_finalize(
     nfc_daemon_client_remove_all_handlers(self->daemon, self->daemon_event_id);
     nfc_daemon_client_unref(self->daemon);
     g_strfreev(self->tags);
+    g_strfreev(self->peers);
     G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }
 

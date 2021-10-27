@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2021 Jolla Ltd.
+ * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -51,16 +51,19 @@ typedef enum nfc_adapter_property {
     NFC_ADAPTER_PROPERTY_MODE,
     NFC_ADAPTER_PROPERTY_TARGET_PRESENT,
     NFC_ADAPTER_PROPERTY_TAGS,
+    /* Since 1.0.6 */
+    NFC_ADAPTER_PROPERTY_PEERS,
+    /* Moving target: */
     NFC_ADAPTER_PROPERTY_COUNT
 } NFC_ADAPTER_PROPERTY;
 
-typedef enum nfc_adapter_mode {
-    NFC_ADAPTER_MODE_NONE           = 0x00,
-    NFC_ADAPTER_MODE_P2P_INITIATOR  = 0x01,
-    NFC_ADAPTER_MODE_READER_WRITER  = 0x02,
-    NFC_ADAPTER_MODE_P2P_TARGET     = 0x04,
-    NFC_ADAPTER_MODE_CARD_EMILATION = 0x08
-} NFC_ADAPTER_MODE;
+/* NFC_ADAPTER_MODE was replaced with NFC_MODE in 1.0.6 */
+#define NFC_ADAPTER_MODE                NFC_MODE
+#define NFC_ADAPTER_MODE_NONE           NFC_MODE_NONE
+#define NFC_ADAPTER_MODE_P2P_INITIATOR  NFC_MODE_P2P_INITIATOR
+#define NFC_ADAPTER_MODE_READER_WRITER  NFC_MODE_READER_WRITER
+#define NFC_ADAPTER_MODE_P2P_TARGET     NFC_MODE_P2P_TARGET
+#define NFC_ADAPTER_MODE_CARD_EMILATION NFC_MODE_CARD_EMILATION
 
 struct nfc_adapter_client {
     const char* path;
@@ -68,10 +71,12 @@ struct nfc_adapter_client {
     gboolean present;
     gboolean enabled;
     gboolean powered;
-    NFC_ADAPTER_MODE supported_modes;
-    NFC_ADAPTER_MODE mode;
+    NFC_MODE supported_modes;
+    NFC_MODE mode;
     gboolean target_present;
     const GStrV* tags;
+    /* Since 1.0.6 */
+    const GStrV* peers;
 };
 
 typedef

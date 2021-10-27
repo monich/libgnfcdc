@@ -53,7 +53,9 @@ typedef enum nfc_default_adapter_property {
     NFC_DEFAULT_ADAPTER_PROPERTY_TAGS,
     /* Since 1.0.5 */
     NFC_DEFAULT_ADAPTER_PROPERTY_VALID,
-    /* This one is a moving target: */
+    /* Since 1.0.6 */
+    NFC_DEFAULT_ADAPTER_PROPERTY_PEERS,
+    /* Moving target: */
     NFC_DEFAULT_ADAPTER_PROPERTY_COUNT
 } NFC_DEFAULT_ADAPTER_PROPERTY;
 
@@ -61,12 +63,14 @@ struct nfc_default_adapter {
     NfcAdapterClient* adapter;
     gboolean enabled;
     gboolean powered;
-    NFC_ADAPTER_MODE supported_modes;
-    NFC_ADAPTER_MODE mode;
+    NFC_MODE supported_modes;
+    NFC_MODE mode;
     gboolean target_present;
     const GStrV* tags;
     /* Since 1.0.5 */
     gboolean valid;
+    /* Since 1.0.6 */
+    const GStrV* peers;
 };
 
 typedef

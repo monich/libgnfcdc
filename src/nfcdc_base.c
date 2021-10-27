@@ -103,13 +103,23 @@ nfc_client_base_property_changed(
 
 static
 void
-nfc_client_base_emit_property_change(
+nfc_client_base_emit_property_changed_signal(
     NfcClientBase* self,
     guint property)
 {
     self->queued_signals &= ~NFC_CLIENT_BASE_SIGNAL_BIT(property);
     g_signal_emit(self, nfc_client_base_signals[SIGNAL_PROPERTY_CHANGED],
         nfc_client_base_property_quark(property), property);
+}
+
+void
+nfc_client_base_signal_property_change(
+    NfcClientBase* self,
+    guint property)
+{
+    /* N.B. This may signal more than one property change */
+    self->queued_signals |= NFC_CLIENT_BASE_SIGNAL_BIT(property);
+    nfc_client_base_emit_queued_signals(self);
 }
 
 void
@@ -142,13 +152,13 @@ nfc_client_base_emit_queued_signals(
          self->queued_signals && p < NFC_CLIENT_BASE_MAX_PROPERTIES;
          p++) {
         if (self->queued_signals & NFC_CLIENT_BASE_SIGNAL_BIT(p)) {
-            nfc_client_base_emit_property_change(self, p);
+            nfc_client_base_emit_property_changed_signal(self, p);
         }
     }
 
     /* Then emit VALID if necessary */
     if (valid_changed) {
-        nfc_client_base_emit_property_change(self,
+        nfc_client_base_emit_property_changed_signal(self,
             NFC_CLIENT_BASE_PROPERTY_VALID);
     }
 

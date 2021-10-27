@@ -11,8 +11,8 @@
  *   1. Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer
- *      in the documentation and/or other materials provided with the
+ *      notice, this list of conditions and the following disclaimer in
+ *      the documentation and/or other materials provided with the
  *      distribution.
  *   3. Neither the names of the copyright holders nor the names of its
  *      contributors may be used to endorse or promote products derived
@@ -35,40 +35,24 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef NFCDC_TYPES_H
-#define NFCDC_TYPES_H
+#ifndef NFCDC_PEER_SERVICE_PRIVATE_H
+#define NFCDC_PEER_SERVICE_PRIVATE_H
 
-#include <gutil_types.h>
+#include "nfcdc_peer_service.h"
 
-G_BEGIN_DECLS
+void
+nfc_peer_service_registered(
+    NfcPeerService* service,
+    guint sap)
+    G_GNUC_INTERNAL;
 
-#define NFCDC_LOG_MODULE nfcdc_log
+void
+nfc_peer_service_registeration_failed(
+    NfcPeerService* service,
+    const GError* error)
+    G_GNUC_INTERNAL;
 
-typedef struct nfc_adapter_client NfcAdapterClient;
-typedef struct nfc_daemon_client NfcDaemonClient;
-typedef struct nfc_default_adapter NfcDefaultAdapter;
-typedef struct nfc_isodep_client NfcIsoDepClient;
-typedef struct nfc_mode_request NfcModeRequest; /* Since 1.0.6 */
-typedef struct nfc_service_connection NfcServiceConnection;  /* Since 1.0.6 */
-typedef struct nfc_peer_client NfcPeerClient; /* Since 1.0.6 */
-typedef struct nfc_peer_service NfcPeerService; /* Since 1.0.6 */
-typedef struct nfc_tag_client NfcTagClient;
-
-typedef enum nfc_daemon_mode {
-    NFC_MODE_NONE           = 0x00,
-    /* Polling */
-    NFC_MODE_P2P_INITIATOR  = 0x01,
-    NFC_MODE_READER_WRITER  = 0x02,
-    /* Listening */
-    NFC_MODE_P2P_TARGET     = 0x04,
-    NFC_MODE_CARD_EMILATION = 0x08
-} NFC_MODE; /* Since 1.0.6 */
-
-extern GLogModule NFCDC_LOG_MODULE;
-
-G_END_DECLS
-
-#endif /* NFCDC_TYPES_H */
+#endif /* NFCDC_PEER_SERVICE_PRIVATE_H */
 
 /*
  * Local Variables:

@@ -53,12 +53,16 @@ SRC = \
   nfcdc_error.c \
   nfcdc_isodep.c \
   nfcdc_log.c \
+  nfcdc_peer.c \
+  nfcdc_peer_service.c \
   nfcdc_tag.c
 
 GEN_SRC = \
   org.sailfishos.nfc.Adapter.c \
   org.sailfishos.nfc.Daemon.c \
   org.sailfishos.nfc.IsoDep.c \
+  org.sailfishos.nfc.LocalService.c \
+  org.sailfishos.nfc.Peer.c \
   org.sailfishos.nfc.Settings.c \
   org.sailfishos.nfc.Tag.c
 

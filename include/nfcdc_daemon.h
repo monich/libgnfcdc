@@ -65,7 +65,7 @@ struct nfc_daemon_client {
     /* Since 1.0.3 */
     int version; /* Zero for nfcd versions < 1.0.26 */
     /* Since 1.0.6 */
-    NFCD_MODE mode; /* Zero for nfcd versions < 1.1.0 */
+    NFC_MODE mode; /* Zero for nfcd versions < 1.1.0 */
 };
 
 #define NFC_DAEMON_VERSION(v1,v2,v3) \
@@ -120,15 +120,15 @@ nfc_daemon_client_remove_handlers(
 /* NfcModeRequest */
 
 struct nfc_mode_request {
-    NFCD_MODE enable;
-    NFCD_MODE disable;
+    NFC_MODE enable;
+    NFC_MODE disable;
 };
 
 NfcModeRequest*
 nfc_mode_request_new(
     NfcDaemonClient* daemon,
-    NFCD_MODE enable,
-    NFCD_MODE disable);  /* Since 1.0.6 */
+    NFC_MODE enable,
+    NFC_MODE disable);  /* Since 1.0.6 */
 
 void
 nfc_mode_request_free(

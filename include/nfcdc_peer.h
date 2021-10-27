@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019-2021 Jolla Ltd.
- * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
+ * Copyright (C) 2021 Jolla Ltd.
+ * Copyright (C) 2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -35,40 +35,103 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef NFCDC_TYPES_H
-#define NFCDC_TYPES_H
+#ifndef NFCDC_PEER_H
+#define NFCDC_PEER_H
 
-#include <gutil_types.h>
+#include <nfcdc_types.h>
+
+#include <gio/gio.h>
+
+/* This API exists since 1.0.6 */
 
 G_BEGIN_DECLS
 
-#define NFCDC_LOG_MODULE nfcdc_log
+typedef struct nfc_peer_client_connection NfcPeerClientConnection;
 
-typedef struct nfc_adapter_client NfcAdapterClient;
-typedef struct nfc_daemon_client NfcDaemonClient;
-typedef struct nfc_default_adapter NfcDefaultAdapter;
-typedef struct nfc_isodep_client NfcIsoDepClient;
-typedef struct nfc_mode_request NfcModeRequest; /* Since 1.0.6 */
-typedef struct nfc_service_connection NfcServiceConnection;  /* Since 1.0.6 */
-typedef struct nfc_peer_client NfcPeerClient; /* Since 1.0.6 */
-typedef struct nfc_peer_service NfcPeerService; /* Since 1.0.6 */
-typedef struct nfc_tag_client NfcTagClient;
+typedef enum nfc_peer_property {
+    NFC_PEER_PROPERTY_ANY,
+    NFC_PEER_PROPERTY_VALID,
+    NFC_PEER_PROPERTY_PRESENT,
+    NFC_PEER_PROPERTY_WKS,
+    NFC_PEER_PROPERTY_COUNT
+} NFC_PEER_PROPERTY;
 
-typedef enum nfc_daemon_mode {
-    NFC_MODE_NONE           = 0x00,
-    /* Polling */
-    NFC_MODE_P2P_INITIATOR  = 0x01,
-    NFC_MODE_READER_WRITER  = 0x02,
-    /* Listening */
-    NFC_MODE_P2P_TARGET     = 0x04,
-    NFC_MODE_CARD_EMILATION = 0x08
-} NFC_MODE; /* Since 1.0.6 */
+struct nfc_peer_client {
+    const char* path;
+    gboolean valid;
+    gboolean present;
+    guint wks;
+};
 
-extern GLogModule NFCDC_LOG_MODULE;
+typedef
+void
+(*NfcPeerPropertyFunc)(
+    NfcPeerClient* peer,
+    NFC_PEER_PROPERTY property,
+    void* user_data);
+
+typedef
+void
+(*NfcPeerClientConnectionFunc)(
+    NfcPeerClient* peer,
+    int fd,
+    const GError* error,
+    void* user_data);
+
+NfcPeerClient*
+nfc_peer_client_new(
+    const char* path);
+
+NfcPeerClient*
+nfc_peer_client_ref(
+    NfcPeerClient* peer);
+
+void
+nfc_peer_client_unref(
+    NfcPeerClient* peer);
+
+gboolean
+nfc_peer_client_connect_sap(
+    NfcPeerClient* peer,
+    guint rsap,
+    GCancellable* cancel,
+    NfcPeerClientConnectionFunc callback,
+    void* user_data,
+    GDestroyNotify destroy);
+
+gboolean
+nfc_peer_client_connect_sn(
+    NfcPeerClient* peer,
+    const char* sn,
+    GCancellable* cancel,
+    NfcPeerClientConnectionFunc callback,
+    void* user_data,
+    GDestroyNotify destroy);
+
+gulong
+nfc_peer_client_add_property_handler(
+    NfcPeerClient* peer,
+    NFC_PEER_PROPERTY property,
+    NfcPeerPropertyFunc callback,
+    void* user_data);
+
+void
+nfc_peer_client_remove_handler(
+    NfcPeerClient* peer,
+    gulong id);
+
+void
+nfc_peer_client_remove_handlers(
+    NfcPeerClient* peer,
+    gulong* ids,
+    guint count);
+
+#define nfc_peer_client_remove_all_handlers(peer, ids) \
+    nfc_peer_client_remove_handlers(peer, ids, G_N_ELEMENTS(ids))
 
 G_END_DECLS
 
-#endif /* NFCDC_TYPES_H */
+#endif /* NFCDC_PEER_H */
 
 /*
  * Local Variables:

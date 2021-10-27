@@ -22,10 +22,10 @@
       <arg name="target_present" type="b" direction="out"/>
       <arg name="tags" type="ao" direction="out"/>
     </method>
-    <!--
     <method name="GetInterfaceVersion">
       <arg name="version" type="i" direction="out"/>
     </method>
+    <!--
     <method name="GetEnabled">
       <arg name="enabled" type="b" direction="out"/>
     </method>
@@ -45,7 +45,7 @@
       <arg name="tags" type="ao" direction="out"/>
     </method>
     -->
-    <!-- Signals -->  
+    <!-- Signals -->
     <signal name="EnabledChanged">
       <arg name="enabled" type="b"/>
     </signal>
@@ -60,6 +60,25 @@
     </signal>
     <signal name="TagsChanged">
       <arg name="tags" type="ao"/>
+    </signal>
+    <!-- Interface version 2 (since 1.1.0) -->
+    <method name="GetAll2">
+      <arg name="version" type="i" direction="out"/>
+      <arg name="enabled" type="b" direction="out"/>
+      <arg name="powered" type="b" direction="out"/>
+      <arg name="supported_modes" type="u" direction="out"/>
+      <arg name="mode" type="u" direction="out"/>
+      <arg name="present" type="b" direction="out"/>
+      <arg name="tags" type="ao" direction="out"/>
+      <arg name="peers" type="ao" direction="out"/>
+    </method>
+    <!--
+    <method name="GetPeers">
+      <arg name="peers" type="ao" direction="out"/>
+    </method>
+    -->
+    <signal name="PeersChanged">
+      <arg name="peers" type="ao"/>
     </signal>
   </interface>
 </node>
