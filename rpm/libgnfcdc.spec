@@ -8,10 +8,15 @@ License: BSD
 URL: https://github.com/monich/libgnfcdc
 Source: %{name}-%{version}.tar.bz2
 
-BuildRequires: pkgconfig
-BuildRequires: pkgconfig(glib-2.0)
-BuildRequires: pkgconfig(libglibutil)
+%define libglibutil_version 1.0.49
+%define glib_version 2.32
 
+BuildRequires: pkgconfig
+BuildRequires: pkgconfig(glib-2.0) >= %{glib_version}
+BuildRequires: pkgconfig(libglibutil) >= %{libglibutil_version}
+
+Requires: glib2 >= %{glib_version}
+Requires: libglibutil >= %{libglibutil_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 
