@@ -48,6 +48,14 @@
 #include "org.sailfishos.nfc.Daemon.h"
 #include "org.sailfishos.nfc.Settings.h"
 
+/*
+ * NFCDC_NEED_PEER_SERVICE=0 can be used to avoid compiling in
+ * nfc_peer_service.c and org.sailfishos.nfc.LocalService.c
+ */
+#ifndef NFCDC_NEED_PEER_SERVICE
+# define NFCDC_NEED_PEER_SERVICE 1
+#endif /* NFCDC_NEED_PEER_SERVICE */
+
 typedef NfcClientBaseClass NfcDaemonClientObjectClass;
 typedef struct nfc_daemon_client_object {
     NfcClientBase base;
@@ -288,6 +296,8 @@ nfc_daemon_client_daemon_set_mode(
     }
 }
 
+#if NFCDC_NEED_PEER_SERVICE
+
 static
 void
 nfc_daemon_client_register_service_done(
@@ -309,6 +319,8 @@ nfc_daemon_client_register_service_done(
     }
     nfc_peer_service_unref(service);
 }
+
+#endif /* NFCDC_NEED_PEER_SERVICE */
 
 static
 void
@@ -828,6 +840,8 @@ nfc_daemon_client_connection(
     return daemon ? nfc_daemon_client_object_cast(daemon)->connection : NULL;
 }
 
+#if NFCDC_NEED_PEER_SERVICE
+
 void
 nfc_daemon_client_register_service(
     NfcDaemonClient* daemon,
@@ -842,6 +856,8 @@ nfc_daemon_client_register_service(
             nfc_peer_service_ref(service));
     }
 }
+
+#endif /* NFCDC_NEED_PEER_SERVICE */
 
 /*==========================================================================*
  * API
