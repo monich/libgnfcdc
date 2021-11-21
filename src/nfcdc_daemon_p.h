@@ -53,6 +53,12 @@ nfc_daemon_client_register_service(
     NfcPeerService* service)
     G_GNUC_INTERNAL;
 
+void
+nfc_daemon_client_unregister_service(
+    NfcDaemonClient* daemon,
+    const char* path)
+    G_GNUC_INTERNAL;
+
 #endif /* NFCDC_DAEMON_PRIVATE_H */
 
 /*

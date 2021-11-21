@@ -857,6 +857,19 @@ nfc_daemon_client_register_service(
     }
 }
 
+void
+nfc_daemon_client_unregister_service(
+    NfcDaemonClient* daemon,
+    const char* path)
+{
+    NfcDaemonClientObject* self = nfc_daemon_client_object_cast(daemon);
+
+    if (self->proxy && path) {
+        org_sailfishos_nfc_daemon_call_unregister_local_service(self->proxy,
+            path, NULL, NULL, NULL);
+    }
+}
+
 #endif /* NFCDC_NEED_PEER_SERVICE */
 
 /*==========================================================================*

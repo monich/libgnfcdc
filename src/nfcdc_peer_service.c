@@ -499,6 +499,7 @@ nfc_peer_service_object_finalize(
 
     GVERBOSE_("%s", self->path);
     if (self->exported) {
+        nfc_daemon_client_unregister_service(self->daemon, self->path);
         g_dbus_interface_skeleton_unexport
             (G_DBUS_INTERFACE_SKELETON(self->object));
     }
