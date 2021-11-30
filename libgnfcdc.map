@@ -1,0 +1,7 @@
+{
+    global:
+        nfc_*;
+        nfcdc_*;
+    local:
+        *;
+};
