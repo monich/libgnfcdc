@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019-2021 Jolla Ltd.
- * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -47,6 +47,7 @@ G_BEGIN_DECLS
 typedef struct nfc_adapter_client NfcAdapterClient;
 typedef struct nfc_daemon_client NfcDaemonClient;
 typedef struct nfc_default_adapter NfcDefaultAdapter;
+typedef struct nfc_isodep_apdu NfcIsoDepApdu;
 typedef struct nfc_isodep_client NfcIsoDepClient;
 typedef struct nfc_mode_request NfcModeRequest; /* Since 1.0.6 */
 typedef struct nfc_service_connection NfcServiceConnection;  /* Since 1.0.6 */

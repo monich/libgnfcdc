@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -42,6 +42,8 @@
 
 #include <gio/gio.h>
 
+#define NFC_ISODEP_SW1(sw) (((sw) >> 8) & 0xff)
+#define NFC_ISODEP_SW2(sw) ((sw) & 0xff)
 #define NFC_ISODEP_SW(sw1,sw2) ((((sw1) << 8) & 0xff00) | ((sw2) & 0xff))
 #define NFC_ISODEP_SW_OK NFC_ISODEP_SW(0x90,00) /* Normal completion */
 
@@ -60,14 +62,14 @@ struct nfc_isodep_client {
     gboolean present;
 };
 
-typedef struct nfc_isodep_apdu {
+struct nfc_isodep_apdu {
     guint8 cla;     /* Class byte */
     guint8 ins;     /* Instruction byte */
     guint8 p1;      /* Parameter byte 1 */
     guint8 p2;      /* Parameter byte 2 */
     GUtilData data; /* Command data */
     guint le;       /* Expected length, zero if none */
-} NfcIsoDepApdu;
+};
 
 typedef
 void
