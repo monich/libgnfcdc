@@ -275,7 +275,7 @@ nfc_daemon_client_daemon_set_adapters(
 
     if (!gutil_strv_equal(self->adapters, adapters)) {
         g_strfreev(self->adapters);
-        pub->adapters = (self->adapters = g_strdupv(adapters)) ?
+        pub->adapters = (self->adapters = adapters) ?
             self->adapters : &nfc_daemon_client_empty_strv;
         nfc_daemon_client_queue_signal_(self, ADAPTERS);
     } else {
