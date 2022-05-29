@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -11,8 +11,8 @@
  *   1. Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
+ *      notice, this list of conditions and the following disclaimer
+ *      in the documentation and/or other materials provided with the
  *      distribution.
  *   3. Neither the names of the copyright holders nor the names of its
  *      contributors may be used to endorse or promote products derived
@@ -46,21 +46,21 @@
 
 #if GUTIL_LOG_DEBUG
 
-G_GNUC_INTERNAL
 void
 nfcdc_dump_strv(
     const char* prefix,
     const char* name,
     const char* sep,
-    const GStrV* strv);
+    const GStrV* strv)
+    G_GNUC_INTERNAL;
 
-G_GNUC_INTERNAL
 void
 nfcdc_dump_bytes(
     const char* prefix,
     const char* name,
     const char* sep,
-    GBytes* bytes);
+    GBytes* bytes)
+    G_GNUC_INTERNAL;
 
 #  define DUMP_STRV(prefix,name,sep,strv) \
    nfcdc_dump_strv(prefix,name,sep,strv)

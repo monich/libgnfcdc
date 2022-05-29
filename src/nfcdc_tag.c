@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019-2020 Jolla Ltd.
- * Copyright (C) 2019-2020 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -69,11 +69,14 @@ typedef struct nfc_tag_client_object {
     GStrV* ndef_records;
 } NfcTagClientObject;
 
+#define PARENT_CLASS nfc_tag_client_object_parent_class
+#define THIS_TYPE nfc_tag_client_object_get_type()
+#define THIS(obj) G_TYPE_CHECK_INSTANCE_CAST(obj, THIS_TYPE, \
+    NfcTagClientObject)
+
+GType THIS_TYPE G_GNUC_INTERNAL;
 G_DEFINE_TYPE(NfcTagClientObject, nfc_tag_client_object, \
-        NFC_CLIENT_TYPE_BASE)
-#define NFC_CLIENT_TYPE_TAG (nfc_tag_client_object_get_type())
-#define NFC_TAG_CLIENT_OBJECT(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
-	NFC_CLIENT_TYPE_TAG, NfcTagClientObject))
+    NFC_CLIENT_TYPE_BASE)
 
 NFC_CLIENT_BASE_ASSERT_VALID(NFC_TAG_PROPERTY_VALID);
 NFC_CLIENT_BASE_ASSERT_COUNT(NFC_TAG_PROPERTY_COUNT);
@@ -174,7 +177,7 @@ nfc_tag_client_lock_data_idle_free(
     GASSERT(tag->lock);
     nfc_tag_client_lock_unref(tag->lock);
     nfc_tag_client_lock_data_deinit(data);
-    g_slice_free1(sizeof(*idle), idle);
+    gutil_slice_free(idle);
 }
 
 static
@@ -204,7 +207,7 @@ nfc_tag_client_lock_done(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcTagClientObject* tag = NFC_TAG_CLIENT_OBJECT(user_data);
+    NfcTagClientObject* tag = THIS(user_data);
     GError* error = NULL;
 
     if (org_sailfishos_nfc_tag_call_release_finish(ORG_SAILFISHOS_NFC_TAG(
@@ -278,7 +281,7 @@ nfc_tag_client_lock_acquire_done(
         g_error_free(error);
     }
     nfc_tag_client_lock_data_deinit(data);
-    g_slice_free1(sizeof(*data), data);
+    gutil_slice_free(data);
 }
 
 NfcTagClientLock*
@@ -306,7 +309,7 @@ nfc_tag_client_lock_unref(
             tag->lock = NULL;
         }
         g_object_unref(tag);
-        g_slice_free1(sizeof(*lock), lock);
+        gutil_slice_free(lock);
     }
 }
 
@@ -320,7 +323,7 @@ nfc_tag_client_object_cast(
     NfcTagClient* pub)
 {
     return G_LIKELY(pub) ?
-        NFC_TAG_CLIENT_OBJECT(G_CAST(pub, NfcTagClientObject, pub)) :
+        THIS(G_CAST(pub, NfcTagClientObject, pub)) :
         NULL;
 }
 
@@ -409,7 +412,7 @@ nfc_tag_client_adapter_changed(
     NFC_ADAPTER_PROPERTY property,
     void* user_data)
 {
-    NfcTagClientObject* self = NFC_TAG_CLIENT_OBJECT(user_data);
+    NfcTagClientObject* self = THIS(user_data);
 
     nfc_tag_client_update(self);
     nfc_tag_client_emit_queued_signals(self);
@@ -422,7 +425,7 @@ nfc_tag_client_init_4(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcTagClientObject* self = NFC_TAG_CLIENT_OBJECT(user_data);
+    NfcTagClientObject* self = THIS(user_data);
     NfcTagClient* tag = &self->pub;
     GError* error = NULL;
     gboolean present;
@@ -470,7 +473,7 @@ nfc_tag_client_init_3(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcTagClientObject* self = NFC_TAG_CLIENT_OBJECT(user_data);
+    NfcTagClientObject* self = THIS(user_data);
     GError* error = NULL;
 
     GASSERT(!self->proxy);
@@ -506,7 +509,7 @@ nfc_tag_client_init_1(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcTagClientObject* self = NFC_TAG_CLIENT_OBJECT(user_data);
+    NfcTagClientObject* self = THIS(user_data);
     GError* error = NULL;
 
     GASSERT(self->proxy_initializing);
@@ -570,7 +573,7 @@ nfc_tag_client_new(
                 char* key = g_strdup(path);
 
                 GVERBOSE_("%s", path);
-                obj = g_object_new(NFC_CLIENT_TYPE_TAG, NULL);
+                obj = g_object_new(THIS_TYPE, NULL);
                 if (!nfc_tag_client_table) {
                     nfc_tag_client_table = g_hash_table_new_full(g_str_hash,
                         g_str_equal, g_free, NULL);
@@ -731,7 +734,7 @@ void
 nfc_tag_client_object_finalize(
     GObject* object)
 {
-    NfcTagClientObject* self = NFC_TAG_CLIENT_OBJECT(object);
+    NfcTagClientObject* self = THIS(object);
     NfcTagClient* pub = &self->pub;
 
     GVERBOSE_("%s", pub->path);
@@ -750,7 +753,7 @@ nfc_tag_client_object_finalize(
         g_hash_table_unref(nfc_tag_client_table);
         nfc_tag_client_table = NULL;
     }
-    G_OBJECT_CLASS(nfc_tag_client_object_parent_class)->finalize(object);
+    G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }
 
 static

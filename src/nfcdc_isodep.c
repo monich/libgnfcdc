@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019-2020 Jolla Ltd.
- * Copyright (C) 2019-2020 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -60,11 +60,14 @@ typedef struct nfc_isodep_client_object {
     const char* name;
 } NfcIsoDepClientObject;
 
+#define PARENT_CLASS nfc_isodep_client_object_parent_class
+#define THIS_TYPE nfc_isodep_client_object_get_type()
+#define THIS(obj) G_TYPE_CHECK_INSTANCE_CAST(obj, THIS_TYPE, \
+    NfcIsoDepClientObject)
+
+GType THIS_TYPE G_GNUC_INTERNAL;
 G_DEFINE_TYPE(NfcIsoDepClientObject, nfc_isodep_client_object, \
-        NFC_CLIENT_TYPE_BASE)
-#define NFC_CLIENT_TYPE_ISODEP (nfc_isodep_client_object_get_type())
-#define NFC_ISODEP_CLIENT_OBJECT(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
-	NFC_CLIENT_TYPE_ISODEP, NfcIsoDepClientObject))
+    NFC_CLIENT_TYPE_BASE)
 
 NFC_CLIENT_BASE_ASSERT_VALID(NFC_ISODEP_PROPERTY_VALID);
 NFC_CLIENT_BASE_ASSERT_COUNT(NFC_ISODEP_PROPERTY_COUNT);
@@ -102,7 +105,7 @@ nfc_isodep_client_object_cast(
     NfcIsoDepClient* pub)
 {
     return G_LIKELY(pub) ?
-        NFC_ISODEP_CLIENT_OBJECT(G_CAST(pub, NfcIsoDepClientObject, pub)) :
+        THIS(G_CAST(pub, NfcIsoDepClientObject, pub)) :
         NULL;
 }
 
@@ -157,7 +160,7 @@ nfc_isodep_client_transmit_done(
         g_variant_unref(response);
     }
     g_object_unref(data->object);
-    g_slice_free1(sizeof(*data), data);
+    gutil_slice_free(data);
 }
 
 static
@@ -231,7 +234,7 @@ nfc_isodep_client_tag_changed(
     NFC_TAG_PROPERTY property,
     void* user_data)
 {
-    NfcIsoDepClientObject* self = NFC_ISODEP_CLIENT_OBJECT(user_data);
+    NfcIsoDepClientObject* self = THIS(user_data);
 
     nfc_isodep_client_update(self);
     nfc_isodep_client_emit_queued_signals(self);
@@ -244,7 +247,7 @@ nfc_isodep_client_init_4(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcIsoDepClientObject* self = NFC_ISODEP_CLIENT_OBJECT(user_data);
+    NfcIsoDepClientObject* self = THIS(user_data);
     GError* error = NULL;
 
     GASSERT(self->proxy_initializing);
@@ -268,7 +271,7 @@ nfc_isodep_client_init_3(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcIsoDepClientObject* self = NFC_ISODEP_CLIENT_OBJECT(user_data);
+    NfcIsoDepClientObject* self = THIS(user_data);
     GError* error = NULL;
 
     GASSERT(!self->proxy);
@@ -304,7 +307,7 @@ nfc_isodep_client_init_1(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcIsoDepClientObject* self = NFC_ISODEP_CLIENT_OBJECT(user_data);
+    NfcIsoDepClientObject* self = THIS(user_data);
     GError* error = NULL;
 
     self->connection = g_bus_get_finish(result, &error);
@@ -353,7 +356,7 @@ nfc_isodep_client_new(
                 char* key = g_strdup(path);
 
                 GVERBOSE_("%s", path);
-                obj = g_object_new(NFC_CLIENT_TYPE_ISODEP, NULL);
+                obj = g_object_new(THIS_TYPE, NULL);
                 if (!nfc_isodep_client_table) {
                     nfc_isodep_client_table = g_hash_table_new_full(g_str_hash,
                         g_str_equal, g_free, NULL);
@@ -497,7 +500,7 @@ void
 nfc_isodep_client_object_finalize(
     GObject* object)
 {
-    NfcIsoDepClientObject* self = NFC_ISODEP_CLIENT_OBJECT(object);
+    NfcIsoDepClientObject* self = THIS(object);
     NfcIsoDepClient* pub = &self->pub;
 
     GVERBOSE_("%s", pub->path);
@@ -512,7 +515,7 @@ nfc_isodep_client_object_finalize(
         g_hash_table_unref(nfc_isodep_client_table);
         nfc_isodep_client_table = NULL;
     }
-    G_OBJECT_CLASS(nfc_isodep_client_object_parent_class)->finalize(object);
+    G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }
 
 static

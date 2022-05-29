@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019-2021 Jolla Ltd.
- * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -97,12 +97,14 @@ typedef struct nfc_mode_request_priv {
     NfcModeRequestImpl* impl;
 } NfcModeRequestPriv;
 
-G_DEFINE_TYPE(NfcDaemonClientObject, nfc_daemon_client_object, \
-        NFC_CLIENT_TYPE_BASE)
 #define PARENT_CLASS nfc_daemon_client_object_parent_class
 #define THIS_TYPE nfc_daemon_client_object_get_type()
-#define THIS(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
-    THIS_TYPE, NfcDaemonClientObject))
+#define THIS(obj) G_TYPE_CHECK_INSTANCE_CAST(obj, THIS_TYPE, \
+    NfcDaemonClientObject)
+
+GType THIS_TYPE G_GNUC_INTERNAL;
+G_DEFINE_TYPE(NfcDaemonClientObject, nfc_daemon_client_object, \
+    NFC_CLIENT_TYPE_BASE)
 
 NFC_CLIENT_BASE_ASSERT_VALID(NFC_DAEMON_PROPERTY_VALID);
 NFC_CLIENT_BASE_ASSERT_COUNT(NFC_DAEMON_PROPERTY_COUNT);

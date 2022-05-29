@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019-2021 Jolla Ltd.
- * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -11,8 +11,8 @@
  *   1. Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
+ *      notice, this list of conditions and the following disclaimer
+ *      in the documentation and/or other materials provided with the
  *      distribution.
  *   3. Neither the names of the copyright holders nor the names of its
  *      contributors may be used to endorse or promote products derived
@@ -62,12 +62,14 @@ typedef struct nfc_default_adapter_object {
     GStrV* peers;
 } NfcDefaultAdapterObject;
 
+#define PARENT_CLASS nfc_default_adapter_object_parent_class
+#define THIS_TYPE nfc_default_adapter_object_get_type()
+#define THIS(obj) G_TYPE_CHECK_INSTANCE_CAST(obj, THIS_TYPE, \
+    NfcDefaultAdapterObject)
+
+GType THIS_TYPE G_GNUC_INTERNAL;
 G_DEFINE_TYPE(NfcDefaultAdapterObject, nfc_default_adapter_object, \
     NFC_CLIENT_TYPE_BASE)
-#define PARENT_CLASS nfc_default_adapter_object_parent_class
-#define THIS_TYPE (nfc_default_adapter_object_get_type())
-#define THIS(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj),\
-    THIS_TYPE, NfcDefaultAdapterObject))
 
 NFC_CLIENT_BASE_ASSERT_COUNT(NFC_DEFAULT_ADAPTER_PROPERTY_COUNT);
 
