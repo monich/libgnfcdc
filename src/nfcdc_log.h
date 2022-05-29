@@ -55,6 +55,14 @@ nfcdc_dump_strv(
     G_GNUC_INTERNAL;
 
 void
+nfcdc_dump_data(
+    const char* prefix,
+    const char* name,
+    const char* sep,
+    const GUtilData* data)
+    G_GNUC_INTERNAL;
+
+void
 nfcdc_dump_bytes(
     const char* prefix,
     const char* name,
@@ -64,10 +72,13 @@ nfcdc_dump_bytes(
 
 #  define DUMP_STRV(prefix,name,sep,strv) \
    nfcdc_dump_strv(prefix,name,sep,strv)
+#  define DUMP_DATA(prefix,name,sep,data) \
+   nfcdc_dump_data(prefix,name,sep,data)
 #  define DUMP_BYTES(prefix,name,sep,bytes) \
    nfcdc_dump_bytes(prefix,name,sep,bytes)
 #else
 #  define DUMP_STRV(prefix,name,sep,strv) ((void)0)
+#  define DUMP_DATA(prefix,name,sep,data) ((void)0)
 #  define DUMP_BYTES(prefix,name,sep,bytes) ((void)0)
 #endif
 

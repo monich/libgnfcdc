@@ -56,6 +56,20 @@ typedef enum nfc_isodep_property {
     NFC_ISODEP_PROPERTY_COUNT
 } NFC_ISODEP_PROPERTY;
 
+typedef enum nfc_isodep_act_param {
+    /* NFC-A */
+    NFC_ISODEP_ACT_PARAM_T0,    /* Format Byte T0 */
+    NFC_ISODEP_ACT_PARAM_TA,    /* Interface Bytes TA (optional) */
+    NFC_ISODEP_ACT_PARAM_TB,    /* Interface Bytes TB (optional) */
+    NFC_ISODEP_ACT_PARAM_TC,    /* Interface Bytes TC (optional) */
+    NFC_ISODEP_ACT_PARAM_HB,    /* Historical Bytes */
+    /* NFC-B */
+    NFC_ISODEP_ACT_PARAM_MBLI,  /* Maximum Buffer Length Index */
+    NFC_ISODEP_ACT_PARAM_DID,   /* Device ID */
+    NFC_ISODEP_ACT_PARAM_HLR,   /* Higher Layer Response (optional) */
+    NFC_ISODEP_ACT_PARAM_COUNT
+} NFC_ISODEP_ACT_PARAM;
+
 struct nfc_isodep_client {
     const char* path;
     gboolean valid;
@@ -98,6 +112,11 @@ nfc_isodep_client_ref(
 void
 nfc_isodep_client_unref(
     NfcIsoDepClient* isodep);
+
+const GUtilData*
+nfc_isodep_client_act_param(
+    NfcIsoDepClient* isodep,
+    NFC_ISODEP_ACT_PARAM param); /* Since 1.0.8 */
 
 gboolean
 nfc_isodep_client_transmit(

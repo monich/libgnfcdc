@@ -55,6 +55,7 @@ typedef struct nfc_isodep_client_object {
     gulong tag_event_id;
     GDBusConnection* connection;
     OrgSailfishosNfcIsoDep* proxy;
+    GHashTable* act_params;
     gboolean proxy_initializing;
     gint version;
     const char* name;
@@ -88,6 +89,8 @@ typedef struct nfc_isodep_transmit_data {
     gulong cancel_id;
 } NfcIsoDepTransmitData;
 
+#define NFC_ISODEP_ACT_PARAM_UNKNOWN NFC_ISODEP_ACT_PARAM_COUNT
+
 static GHashTable* nfc_isodep_client_table;
 
 static
@@ -107,6 +110,33 @@ nfc_isodep_client_object_cast(
     return G_LIKELY(pub) ?
         THIS(G_CAST(pub, NfcIsoDepClientObject, pub)) :
         NULL;
+}
+
+static
+NFC_ISODEP_ACT_PARAM
+nfc_isodep_client_parse_act_param(
+    const char* key)
+{
+    if (key) {
+        if (!strcmp(key, "T0")) {
+            return NFC_ISODEP_ACT_PARAM_T0;
+        } else if (!strcmp(key, "TA")) {
+            return NFC_ISODEP_ACT_PARAM_TA;
+        } else if (!strcmp(key, "TB")) {
+            return NFC_ISODEP_ACT_PARAM_TB;
+        } else if (!strcmp(key, "TC")) {
+            return NFC_ISODEP_ACT_PARAM_TC;
+        } else if (!strcmp(key, "HB")) {
+            return NFC_ISODEP_ACT_PARAM_HB;
+        } else if (!strcmp(key, "MBLI")) {
+            return NFC_ISODEP_ACT_PARAM_MBLI;
+        } else if (!strcmp(key, "DID")) {
+            return NFC_ISODEP_ACT_PARAM_DID;
+        } else if (!strcmp(key, "HLR")) {
+            return NFC_ISODEP_ACT_PARAM_HLR;
+        }
+    }
+    return NFC_ISODEP_ACT_PARAM_UNKNOWN;
 }
 
 static
@@ -242,6 +272,92 @@ nfc_isodep_client_tag_changed(
 
 static
 void
+nfc_isodep_client_init_5(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcIsoDepClientObject* self = THIS(user_data);
+    GError* error = NULL;
+    GVariant* act_params = NULL;
+    int version = 0;
+
+    GASSERT(self->proxy_initializing);
+    self->proxy_initializing = FALSE;
+    if (!org_sailfishos_nfc_iso_dep_call_get_all2_finish(self->proxy,
+        &version, &act_params, result, &error)) {
+        GERR("%s", GERRMSG(error));
+        g_error_free(error);
+        /* Need to retry? */
+        nfc_isodep_client_drop_proxy(self);
+    } else {
+        GVariantIter it;
+        GVariant* entry;
+
+        if (!self->act_params) {
+            self->act_params = g_hash_table_new_full(g_direct_hash,
+                g_direct_equal, NULL, g_free);
+        }
+
+        /* Parse the activation parameters */
+        for (g_variant_iter_init(&it, act_params);
+             (entry = g_variant_iter_next_value(&it)) != NULL;
+             g_variant_unref(entry)) {
+            GVariant* key = g_variant_get_child_value(entry, 0);
+            GVariant* value = g_variant_get_child_value(entry, 1);
+            const char* ap_name = g_variant_get_string(key, NULL);
+            const NFC_ISODEP_ACT_PARAM ap =
+                nfc_isodep_client_parse_act_param(ap_name);
+
+            if (ap != NFC_ISODEP_ACT_PARAM_UNKNOWN) {
+                GUtilData* value_data = NULL;
+
+                if (g_variant_is_of_type(value, G_VARIANT_TYPE_VARIANT)) {
+                    GVariant* tmp = g_variant_get_variant(value);
+                    g_variant_unref(value);
+                    value = tmp;
+                }
+
+                /* Allocate value as a single memory block */
+                if (g_variant_is_of_type(value, G_VARIANT_TYPE_BYTESTRING)) {
+                    const gsize variant_size = g_variant_get_size(value);
+                    void* data;
+
+                    value_data = g_malloc(sizeof(GUtilData) + variant_size);
+                    data = value_data + 1;
+                    value_data->size = variant_size;
+                    value_data->bytes = data;
+                    memcpy(data, g_variant_get_data(value), variant_size);
+                } else if (g_variant_is_of_type(value, G_VARIANT_TYPE_BYTE)) {
+                    guint8* data;
+
+                    value_data = g_malloc(sizeof(GUtilData) + 1);
+                    data = (guint8*)(value_data + 1);
+                    value_data->size = 1;
+                    value_data->bytes = data;
+                    *data = g_variant_get_byte(value);
+                }
+
+                if (value_data) {
+                    DUMP_DATA(self->name, ap_name, "=", value_data);
+                    g_hash_table_insert(self->act_params, GINT_TO_POINTER(ap),
+                        value_data);
+                }
+            }
+
+            g_variant_unref(key);
+            g_variant_unref(value);
+        }
+
+        self->version = version;
+        nfc_isodep_client_update_valid_and_present(self);
+        nfc_isodep_client_emit_queued_signals(self);
+    }
+    g_object_unref(self);
+}
+
+static
+void
 nfc_isodep_client_init_4(
     GObject* proxy,
     GAsyncResult* result,
@@ -249,18 +365,26 @@ nfc_isodep_client_init_4(
 {
     NfcIsoDepClientObject* self = THIS(user_data);
     GError* error = NULL;
+    int version = 0;
 
     GASSERT(self->proxy_initializing);
-    self->proxy_initializing = FALSE;
     if (!org_sailfishos_nfc_iso_dep_call_get_all_finish(self->proxy,
-        &self->version, result, &error)) {
+        &version, result, &error)) {
         GERR("%s", GERRMSG(error));
+        self->proxy_initializing = FALSE;
         g_error_free(error);
         /* Need to retry? */
         nfc_isodep_client_drop_proxy(self);
+    } else if (version > 1) {
+        /* Version 2 or greater */
+        org_sailfishos_nfc_iso_dep_call_get_all2(self->proxy, NULL,
+            nfc_isodep_client_init_5, g_object_ref(self));
+    } else {
+        self->version = version;
+        self->proxy_initializing = FALSE;
+        nfc_isodep_client_update_valid_and_present(self);
+        nfc_isodep_client_emit_queued_signals(self);
     }
-    nfc_isodep_client_update_valid_and_present(self);
-    nfc_isodep_client_emit_queued_signals(self);
     g_object_unref(self);
 }
 
@@ -344,7 +468,6 @@ nfc_isodep_client_new(
     if (G_LIKELY(path) && g_variant_is_object_path(path)) {
         const char* sep = strrchr(path, '/');
         if (sep > path) {
-            char* tag_path = g_strndup(path, sep - path);
             NfcIsoDepClientObject* obj = NULL;
 
             if (nfc_isodep_client_table) {
@@ -379,7 +502,6 @@ nfc_isodep_client_new(
                         g_object_ref(obj));
                 }
             }
-            g_free(tag_path);
             return &obj->pub;
         }
     }
@@ -405,6 +527,18 @@ nfc_isodep_client_unref(
     if (G_LIKELY(isodep)) {
         g_object_unref(nfc_isodep_client_object_cast(isodep));
     }
+}
+
+const GUtilData*
+nfc_isodep_client_act_param(
+    NfcIsoDepClient* isodep,
+    NFC_ISODEP_ACT_PARAM param) /* Since 1.0.8 */
+{
+    NfcIsoDepClientObject* self = nfc_isodep_client_object_cast(isodep);
+
+    return (self && self->act_params) ?
+        g_hash_table_lookup(self->act_params, GINT_TO_POINTER(param)) :
+        NULL;
 }
 
 gboolean
@@ -509,6 +643,9 @@ nfc_isodep_client_object_finalize(
     nfc_tag_client_unref(self->tag);
     if (self->connection) {
         g_object_unref(self->connection);
+    }
+    if (self->act_params) {
+        g_hash_table_destroy(self->act_params);
     }
     g_hash_table_remove(nfc_isodep_client_table, pub->path);
     if (g_hash_table_size(nfc_isodep_client_table) == 0) {

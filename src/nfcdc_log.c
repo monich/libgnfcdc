@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -11,8 +11,8 @@
  *   1. Redistributions of source code must retain the above copyright
  *      notice, this list of conditions and the following disclaimer.
  *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
+ *      notice, this list of conditions and the following disclaimer
+ *      in the documentation and/or other materials provided with the
  *      distribution.
  *   3. Neither the names of the copyright holders nor the names of its
  *      contributors may be used to endorse or promote products derived
@@ -61,17 +61,57 @@ nfcdc_dump_strv(
                 g_string_append(buf, *ptr);
             }
             if (prefix) {
-                GDEBUG("%s: %s %s {%s}", prefix, name, sep, buf->str);
-            } else {
+                if (sep) {
+                    GDEBUG("%s: %s %s {%s}", prefix, name, sep, buf->str);
+                } else {
+                    GDEBUG("%s: %s {%s}", prefix, name, buf->str);
+                }
+            } else if (sep) {
                 GDEBUG("%s %s {%s}", name, sep, buf->str);
+            } else {
+                GDEBUG("%s {%s}", name, buf->str);
             }
             g_string_free(buf, TRUE);
         } else {
             if (prefix) {
                 GDEBUG("%s: %s %s", prefix, name, sep);
-            } else {
+            } else if (sep) {
                 GDEBUG("%s %s", name, sep);
+            } else {
+                GDEBUG("%s", name);
             }
+        }
+    }
+}
+
+void
+nfcdc_dump_data(
+    const char* prefix,
+    const char* name,
+    const char* sep,
+    const GUtilData* data)
+{
+    if (GLOG_ENABLED(GLOG_LEVEL_DEBUG)) {
+        if (data && data->size) {
+            GString* buf = g_string_new(NULL);
+            gsize i;
+
+            g_string_printf(buf, "%02X", data->bytes[0]);
+            for (i = 1; i < data->size; i++) {
+                g_string_append_printf(buf, ":%02X", data->bytes[i]);
+            }
+            if (prefix) {
+                GDEBUG("%s: %s %s %s", prefix, name, sep, buf->str);
+            } else {
+                GDEBUG("%s %s %s", name, sep, buf->str);
+            }
+            g_string_free(buf, TRUE);
+        } else if (prefix) {
+            GDEBUG("%s: %s %s", prefix, name, sep);
+        } else if (sep) {
+            GDEBUG("%s %s", name, sep);
+        } else {
+            GDEBUG("%s", name);
         }
     }
 }
@@ -85,30 +125,12 @@ nfcdc_dump_bytes(
 {
     if (GLOG_ENABLED(GLOG_LEVEL_DEBUG)) {
         if (bytes) {
-            gsize size;
-            const guint8* data = g_bytes_get_data(bytes, &size);
+            GUtilData data;
 
-            if (size > 0) {
-                GString* buf = g_string_new(NULL);
-                gsize i;
-
-                g_string_printf(buf, "%02X", data[0]);
-                for (i = 1; i < size; i++) {
-                    g_string_append_printf(buf, ":%02X", data[i]);
-                }
-                if (prefix) {
-                    GDEBUG("%s: %s %s %s", prefix, name, sep, buf->str);
-                } else {
-                    GDEBUG("%s %s %s", name, sep, buf->str);
-                }
-                g_string_free(buf, TRUE);
-                return;
-            }
-        }
-        if (prefix) {
-            GDEBUG("%s: %s %s", prefix, name, sep);
+            data.bytes = g_bytes_get_data(bytes, &data.size);
+            nfcdc_dump_data(prefix, name, sep, &data);
         } else {
-            GDEBUG("%s %s", name, sep);
+            nfcdc_dump_data(prefix, name, sep, NULL);
         }
     }
 }
