@@ -1,6 +1,6 @@
 Name: libgnfcdc
 
-Version: 1.0.8
+Version: 1.0.9
 Release: 0
 Summary: Glib based NFC Daemon Client
 Group: Development/Libraries
