@@ -53,8 +53,8 @@
     <method name="GetNdefRecords">
       <arg name="ndef_records" type="ao" direction="out"/>
     </method>
-    <method name="Deactivate"/>
     -->
+    <method name="Deactivate"/>
     <!-- Interface version 2 -->
     <signal name="Removed"/>
     <method name="Acquire">

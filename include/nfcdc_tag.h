@@ -1,6 +1,6 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -68,6 +68,13 @@ typedef struct nfc_tag_client_lock NfcTagClientLock;
 
 typedef
 void
+(*NfcTagClientCallFunc)(
+    NfcTagClient* tag,
+    const GError* error,
+    void* user_data); /* Since 1.0.9 */
+
+typedef
+void
 (*NfcTagPropertyFunc)(
     NfcTagClient* tag,
     NFC_TAG_PROPERTY property,
@@ -101,6 +108,14 @@ nfc_tag_client_acquire_lock(
     NfcTagClientLockFunc callback,
     void* user_data,
     GDestroyNotify destroy);
+
+gboolean
+nfc_tag_client_deactivate(
+    NfcTagClient* tag,
+    GCancellable* cancel,
+    NfcTagClientCallFunc callback,
+    void* user_data,
+    GDestroyNotify destroy); /* Since 1.0.9 */
 
 gulong
 nfc_tag_client_add_property_handler(
