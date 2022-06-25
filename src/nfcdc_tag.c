@@ -682,6 +682,13 @@ nfc_tag_client_unref(
     }
 }
 
+NfcTagClientLock*
+nfc_tag_client_get_lock(
+    NfcTagClient* tag) /* Since 1.0.10 */
+{
+    return G_LIKELY(tag) ? nfc_tag_client_object_cast(tag)->lock : NULL;
+}
+
 gboolean
 nfc_tag_client_acquire_lock(
     NfcTagClient* tag,

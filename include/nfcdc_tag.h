@@ -100,6 +100,10 @@ void
 nfc_tag_client_unref(
     NfcTagClient* tag);
 
+NfcTagClientLock*
+nfc_tag_client_get_lock(
+    NfcTagClient* tag); /* Since 1.0.10 */
+
 gboolean
 nfc_tag_client_acquire_lock(
     NfcTagClient* tag,
