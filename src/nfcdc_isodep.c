@@ -529,6 +529,15 @@ nfc_isodep_client_unref(
     }
 }
 
+NfcTagClient*
+nfc_isodep_client_tag(
+    NfcIsoDepClient* isodep) /* Since 1.0.10 */
+{
+    return G_LIKELY(isodep) ?
+        nfc_isodep_client_object_cast(isodep)->tag :
+        NULL;
+}
+
 const GUtilData*
 nfc_isodep_client_act_param(
     NfcIsoDepClient* isodep,

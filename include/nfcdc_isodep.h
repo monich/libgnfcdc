@@ -113,6 +113,10 @@ void
 nfc_isodep_client_unref(
     NfcIsoDepClient* isodep);
 
+NfcTagClient*
+nfc_isodep_client_tag(
+    NfcIsoDepClient* isodep); /* Since 1.0.10 */
+
 const GUtilData*
 nfc_isodep_client_act_param(
     NfcIsoDepClient* isodep,
