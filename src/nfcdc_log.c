@@ -42,6 +42,14 @@ GLOG_MODULE_DEFINE("nfc-client");
 
 #if GUTIL_LOG_DEBUG
 
+static inline
+gboolean
+nfcdc_blank_str(
+    const char* prefix)
+{
+    return !prefix[strspn(prefix," \t")];
+}
+
 void
 nfcdc_dump_strv(
     const char* prefix,
@@ -62,7 +70,8 @@ nfcdc_dump_strv(
             }
             if (prefix) {
                 if (sep) {
-                    GDEBUG("%s: %s %s {%s}", prefix, name, sep, buf->str);
+                    GDEBUG("%s%s%s %s {%s}", prefix, nfcdc_blank_str(prefix) ?
+                               "" : ": ", name, sep, buf->str);
                 } else {
                     GDEBUG("%s: %s {%s}", prefix, name, buf->str);
                 }
@@ -74,7 +83,8 @@ nfcdc_dump_strv(
             g_string_free(buf, TRUE);
         } else {
             if (prefix) {
-                GDEBUG("%s: %s %s", prefix, name, sep);
+                GDEBUG("%s%s%s %s", prefix, nfcdc_blank_str(prefix) ?
+                    "" : ": ", name, sep);
             } else if (sep) {
                 GDEBUG("%s %s", name, sep);
             } else {
@@ -101,13 +111,15 @@ nfcdc_dump_data(
                 g_string_append_printf(buf, ":%02X", data->bytes[i]);
             }
             if (prefix) {
-                GDEBUG("%s: %s %s %s", prefix, name, sep, buf->str);
+                GDEBUG("%s%s%s %s %s", prefix, nfcdc_blank_str(prefix) ?
+                    "" : ": ", name, sep, buf->str);
             } else {
                 GDEBUG("%s %s %s", name, sep, buf->str);
             }
             g_string_free(buf, TRUE);
         } else if (prefix) {
-            GDEBUG("%s: %s %s", prefix, name, sep);
+            GDEBUG("%s%s%s %s", prefix, nfcdc_blank_str(prefix) ?
+                "" : ": ", name, sep);
         } else if (sep) {
             GDEBUG("%s %s", name, sep);
         } else {
