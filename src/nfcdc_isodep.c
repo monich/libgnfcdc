@@ -38,8 +38,9 @@
 #include "nfcdc_isodep.h"
 #include "nfcdc_base.h"
 #include "nfcdc_dbus.h"
-#include "nfcdc_tag_p.h"
 #include "nfcdc_log.h"
+#include "nfcdc_tag_p.h"
+#include "nfcdc_util_p.h"
 
 #include <gutil_macros.h>
 #include <gutil_misc.h>
@@ -113,8 +114,8 @@ nfc_isodep_client_object_cast(
 }
 
 static
-NFC_ISODEP_ACT_PARAM
-nfc_isodep_client_parse_act_param(
+int
+nfc_isodep_client_act_param_key(
     const char* key)
 {
     if (key) {
@@ -136,7 +137,7 @@ nfc_isodep_client_parse_act_param(
             return NFC_ISODEP_ACT_PARAM_HLR;
         }
     }
-    return NFC_ISODEP_ACT_PARAM_UNKNOWN;
+    return -1;
 }
 
 static
@@ -279,79 +280,25 @@ nfc_isodep_client_init_5(
 {
     NfcIsoDepClientObject* self = THIS(user_data);
     GError* error = NULL;
-    GVariant* act_params = NULL;
+    GVariant* dict = NULL;
     int version = 0;
 
     GASSERT(self->proxy_initializing);
     self->proxy_initializing = FALSE;
     if (!org_sailfishos_nfc_iso_dep_call_get_all2_finish(self->proxy,
-        &version, &act_params, result, &error)) {
+        &version, &dict, result, &error)) {
         GERR("%s", GERRMSG(error));
         g_error_free(error);
         /* Need to retry? */
         nfc_isodep_client_drop_proxy(self);
     } else {
-        GVariantIter it;
-        GVariant* entry;
-
-        if (!self->act_params) {
-            self->act_params = g_hash_table_new_full(g_direct_hash,
-                g_direct_equal, NULL, g_free);
-        }
-
-        /* Parse the activation parameters */
-        for (g_variant_iter_init(&it, act_params);
-             (entry = g_variant_iter_next_value(&it)) != NULL;
-             g_variant_unref(entry)) {
-            GVariant* key = g_variant_get_child_value(entry, 0);
-            GVariant* value = g_variant_get_child_value(entry, 1);
-            const char* ap_name = g_variant_get_string(key, NULL);
-            const NFC_ISODEP_ACT_PARAM ap =
-                nfc_isodep_client_parse_act_param(ap_name);
-
-            if (ap != NFC_ISODEP_ACT_PARAM_UNKNOWN) {
-                GUtilData* value_data = NULL;
-
-                if (g_variant_is_of_type(value, G_VARIANT_TYPE_VARIANT)) {
-                    GVariant* tmp = g_variant_get_variant(value);
-                    g_variant_unref(value);
-                    value = tmp;
-                }
-
-                /* Allocate value as a single memory block */
-                if (g_variant_is_of_type(value, G_VARIANT_TYPE_BYTESTRING)) {
-                    const gsize variant_size = g_variant_get_size(value);
-                    void* data;
-
-                    value_data = g_malloc(sizeof(GUtilData) + variant_size);
-                    data = value_data + 1;
-                    value_data->size = variant_size;
-                    value_data->bytes = data;
-                    memcpy(data, g_variant_get_data(value), variant_size);
-                } else if (g_variant_is_of_type(value, G_VARIANT_TYPE_BYTE)) {
-                    guint8* data;
-
-                    value_data = g_malloc(sizeof(GUtilData) + 1);
-                    data = (guint8*)(value_data + 1);
-                    value_data->size = 1;
-                    value_data->bytes = data;
-                    *data = g_variant_get_byte(value);
-                }
-
-                if (value_data) {
-                    DUMP_DATA(self->name, ap_name, "=", value_data);
-                    g_hash_table_insert(self->act_params, GINT_TO_POINTER(ap),
-                        value_data);
-                }
-            }
-
-            g_variant_unref(key);
-            g_variant_unref(value);
-        }
-
+        GDEBUG("%s: ISO-DEP activation parameters", self->name);
+        self->act_params = nfc_parse_dict(self->act_params, dict,
+            nfc_isodep_client_act_param_key);
         self->version = version;
         nfc_isodep_client_update_valid_and_present(self);
         nfc_isodep_client_emit_queued_signals(self);
+        g_variant_unref(dict);
     }
     g_object_unref(self);
 }
@@ -383,8 +330,8 @@ nfc_isodep_client_init_4(
         self->version = version;
         self->proxy_initializing = FALSE;
         nfc_isodep_client_update_valid_and_present(self);
-        nfc_isodep_client_emit_queued_signals(self);
     }
+    nfc_isodep_client_emit_queued_signals(self);
     g_object_unref(self);
 }
 

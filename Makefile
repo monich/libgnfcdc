@@ -55,7 +55,8 @@ SRC = \
   nfcdc_log.c \
   nfcdc_peer.c \
   nfcdc_peer_service.c \
-  nfcdc_tag.c
+  nfcdc_tag.c \
+  nfcdc_util.c
 
 GEN_SRC = \
   org.sailfishos.nfc.Adapter.c \

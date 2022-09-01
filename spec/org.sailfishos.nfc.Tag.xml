@@ -21,6 +21,18 @@
         32 - NFC-DEP Protocol (ISO 18092)
 
       The above codes are bitmasks elsewhere, but here used as enum values.
+
+      Poll Parameters:
+
+        NFC-A:
+          "SEL_RES"  - "ay", SEL_RES Response
+          "NFCID1"   - "ay", Device identifier
+
+        NFC-B:
+          "NFCID0"   - "ay", NFCID0 (device identifier) part of SENSB_RES
+          "APPDATA"  - "ay", Application Data part of SENSB_RES
+          "PROTINFO" - "ay", Protocol Info part of SENSB_RES
+
     -->
     <method name="GetAll">
       <arg name="version" type="i" direction="out"/>
@@ -61,5 +73,39 @@
       <arg name="wait" type="b" direction="in"/>
     </method>
     <method name="Release"/>
+    <!-- Interface version 3 -->
+    <method name="GetAll3">
+      <arg name="version" type="i" direction="out"/>
+      <arg name="present" type="b" direction="out"/>
+      <arg name="technology" type="u" direction="out"/>
+      <arg name="protocol" type="u" direction="out"/>
+      <arg name="type" type="u" direction="out"/>
+      <arg name="interfaces" type="as" direction="out"/>
+      <arg name="ndef_records" type="ao" direction="out"/>
+      <arg name="poll_parameters" type="a{sv}" direction="out"/>
+    </method>
+    <!--
+    <method name="GetPollParameters">
+      <arg name="poll_parameters" type="a{sv}" direction="out"/>
+    </method>
+    -->
+    <!-- Interface version 4 -->
+    <!--
+    <method name="Transceive">
+      <arg name="data" type="ay" direction="in">
+        <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
+      </arg>
+      <arg name="response" type="ay" direction="out">
+        <annotation name="org.gtk.GDBus.C.ForceGVariant" value="true"/>
+      </arg>
+    </method>
+    -->
+    <!-- Interface version 5 -->
+    <!--
+    <method name="Acquire2">
+      <arg name="wait" type="b" direction="in"/>
+    </method>
+    <method name="Release2"/>
+    -->
   </interface>
 </node>

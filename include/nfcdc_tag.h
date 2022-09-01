@@ -56,6 +56,17 @@ typedef enum nfc_tag_property {
     NFC_TAG_PROPERTY_COUNT
 } NFC_TAG_PROPERTY;
 
+typedef enum nfc_tag_poll_param {
+    /* NFC-A */
+    NFC_TAG_POLL_PARAM_SELRES,    /* SEL_RES Response */
+    NFC_TAG_POLL_PARAM_NFCID1,    /* NFCID1 */
+    /* NFC-B */
+    NFC_TAG_POLL_PARAM_NFCID0,    /* NFCID0 (optional) */
+    NFC_TAG_POLL_PARAM_APPDATA,   /* SENSB_RES */
+    NFC_TAG_POLL_PARAM_PROTINFO,  /* SENSB_RES/PROTINFO (optional) */
+    NFC_TAG_POLL_PARAM_COUNT
+} NFC_TAG_POLL_PARAM; /* Since 1.0.10 */
+
 struct nfc_tag_client {
     const char* path;
     gboolean valid;
@@ -112,6 +123,11 @@ nfc_tag_client_acquire_lock(
     NfcTagClientLockFunc callback,
     void* user_data,
     GDestroyNotify destroy);
+
+const GUtilData*
+nfc_tag_client_poll_param(
+    NfcTagClient* tag,
+    NFC_TAG_POLL_PARAM param); /* Since 1.0.10 */
 
 gboolean
 nfc_tag_client_deactivate(

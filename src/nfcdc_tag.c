@@ -38,8 +38,9 @@
 #include "nfcdc_adapter_p.h"
 #include "nfcdc_base.h"
 #include "nfcdc_dbus.h"
-#include "nfcdc_tag_p.h"
 #include "nfcdc_log.h"
+#include "nfcdc_tag_p.h"
+#include "nfcdc_util_p.h"
 
 #include <gutil_macros.h>
 #include <gutil_misc.h>
@@ -62,6 +63,7 @@ typedef struct nfc_tag_client_object {
     NfcAdapterClient* adapter;
     gulong adapter_event_id[ADAPTER_SIGNAL_COUNT];
     OrgSailfishosNfcTag* proxy;
+    GHashTable* poll_params;
     gboolean proxy_initializing;
     gint version;
     const char* name;
@@ -338,6 +340,27 @@ nfc_tag_client_object_cast(
 }
 
 static
+int
+nfc_tag_client_poll_param_key(
+    const char* key)
+{
+    if (key) {
+        if (!strcmp(key, "SEL_RES")) {
+            return NFC_TAG_POLL_PARAM_SELRES;
+        } else if (!strcmp(key, "NFCID1")) {
+            return NFC_TAG_POLL_PARAM_NFCID1;
+        } else if (!strcmp(key, "NFCID0")) {
+            return NFC_TAG_POLL_PARAM_NFCID0;
+        } else if (!strcmp(key, "APPDATA")) {
+            return NFC_TAG_POLL_PARAM_APPDATA;
+        } else if (!strcmp(key, "PROTINFO")) {
+            return NFC_TAG_POLL_PARAM_PROTINFO;
+        }
+    }
+    return -1;
+}
+
+static
 void
 nfc_tag_client_call_cancelled(
     GCancellable* cancel,
@@ -473,49 +496,105 @@ nfc_tag_client_adapter_changed(
 
 static
 void
+nfc_tag_client_init_finished(
+    NfcTagClientObject* self,
+    gboolean present,
+    gchar** interfaces,
+    gchar** ndef_records,
+    GVariant* dict)
+{
+    NfcTagClient* tag = &self->pub;
+
+    if (tag->present != present) {
+        tag->present = present;
+        nfc_tag_client_queue_signal(self, PRESENT);
+    }
+    if (gutil_strv_equal(self->interfaces, interfaces)) {
+        g_strfreev(interfaces);
+    } else {
+        g_strfreev(self->interfaces);
+        tag->interfaces = self->interfaces = interfaces;
+        nfc_tag_client_queue_signal(self, INTERFACES);
+    }
+    if (gutil_strv_equal(self->ndef_records, ndef_records)) {
+        g_strfreev(ndef_records);
+    } else {
+        g_strfreev(self->ndef_records);
+        tag->ndef_records = self->ndef_records = ndef_records;
+        nfc_tag_client_queue_signal(self, NDEF_RECORDS);
+    }
+    if (dict) {
+        GDEBUG("%s: Poll parameters", self->name);
+        self->poll_params = nfc_parse_dict(self->poll_params, dict,
+            nfc_tag_client_poll_param_key);
+        g_variant_unref(dict);
+    }
+}
+
+static
+void
+nfc_tag_client_init_5(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcTagClientObject* self = THIS(user_data);
+    GError* error = NULL;
+    gboolean present;
+    gchar** interfaces;
+    gchar** ndef_records;
+    GVariant* dict;
+
+    GASSERT(self->proxy_initializing);
+    self->proxy_initializing = FALSE;
+    if (org_sailfishos_nfc_tag_call_get_all3_finish(self->proxy,
+        NULL, &present, NULL, NULL, NULL, &interfaces,
+        &ndef_records, &dict, result, &error)) {
+        nfc_tag_client_init_finished(self, present, interfaces,
+            ndef_records, dict);
+        nfc_tag_client_update_valid_and_present(self);
+    } else {
+        GERR("%s", GERRMSG(error));
+        g_error_free(error);
+        nfc_tag_client_drop_proxy(self);
+    }
+    nfc_tag_client_emit_queued_signals(self);
+    g_object_unref(self);
+}
+
+static
+void
 nfc_tag_client_init_4(
     GObject* proxy,
     GAsyncResult* result,
     gpointer user_data)
 {
     NfcTagClientObject* self = THIS(user_data);
-    NfcTagClient* tag = &self->pub;
     GError* error = NULL;
     gboolean present;
     gchar** interfaces;
     gchar** ndef_records;
 
     GASSERT(self->proxy_initializing);
-    self->proxy_initializing = FALSE;
-    if (org_sailfishos_nfc_tag_call_get_all_finish(self->proxy, &self->version,
-        &present, NULL, NULL, NULL, &interfaces, &ndef_records,
-        result, &error)) {
-        if (tag->present != present) {
-            tag->present = present;
-            nfc_tag_client_queue_signal(self, PRESENT);
-        }
-        if (gutil_strv_equal(self->interfaces, interfaces)) {
-            g_strfreev(interfaces);
-        } else {
-            g_strfreev(self->interfaces);
-            tag->interfaces = self->interfaces = interfaces;
-            nfc_tag_client_queue_signal(self, INTERFACES);
-        }
-        if (gutil_strv_equal(self->ndef_records, ndef_records)) {
-            g_strfreev(ndef_records);
-        } else {
-            g_strfreev(self->ndef_records);
-            tag->ndef_records = self->ndef_records = ndef_records;
-            nfc_tag_client_queue_signal(self, NDEF_RECORDS);
-        }
-    } else {
+    if (!org_sailfishos_nfc_tag_call_get_all_finish(self->proxy,
+        &self->version, &present, NULL, NULL, NULL, &interfaces,
+        &ndef_records, result, &error)) {
         GERR("%s", GERRMSG(error));
+        self->proxy_initializing = FALSE;
         g_error_free(error);
-        /* Need to retry? */
         nfc_tag_client_drop_proxy(self);
+    } else if (self->version >= 3) {
+        g_strfreev(interfaces);
+        g_strfreev(ndef_records);
+        org_sailfishos_nfc_tag_call_get_all3(self->proxy, NULL,
+            nfc_tag_client_init_5, g_object_ref(self));
+    } else {
+        self->proxy_initializing = FALSE;
+        nfc_tag_client_init_finished(self, present, interfaces,
+            ndef_records, NULL);
+        nfc_tag_client_update_valid_and_present(self);
+        nfc_tag_client_emit_queued_signals(self);
     }
-    nfc_tag_client_update_valid_and_present(self);
-    nfc_tag_client_emit_queued_signals(self);
     g_object_unref(self);
 }
 
@@ -737,6 +816,18 @@ nfc_tag_client_acquire_lock(
     }
 }
 
+const GUtilData*
+nfc_tag_client_poll_param(
+    NfcTagClient* tag,
+    NFC_TAG_POLL_PARAM param) /* Since 1.0.10 */
+{
+    NfcTagClientObject* self = nfc_tag_client_object_cast(tag);
+
+    return (self && self->poll_params) ?
+        g_hash_table_lookup(self->poll_params, GINT_TO_POINTER(param)) :
+        NULL;
+}
+
 gboolean
 nfc_tag_client_deactivate(
     NfcTagClient* tag,
@@ -847,6 +938,9 @@ nfc_tag_client_object_finalize(
     nfc_adapter_client_unref(self->adapter);
     if (self->connection) {
         g_object_unref(self->connection);
+    }
+    if (self->poll_params) {
+        g_hash_table_destroy(self->poll_params);
     }
     g_strfreev(self->interfaces);
     g_strfreev(self->ndef_records);
