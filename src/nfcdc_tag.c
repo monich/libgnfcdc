@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
- * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer
- *      in the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -499,6 +501,7 @@ void
 nfc_tag_client_init_finished(
     NfcTagClientObject* self,
     gboolean present,
+    NFC_TECH tech,
     gchar** interfaces,
     gchar** ndef_records,
     GVariant* dict)
@@ -508,6 +511,10 @@ nfc_tag_client_init_finished(
     if (tag->present != present) {
         tag->present = present;
         nfc_tag_client_queue_signal(self, PRESENT);
+    }
+    if (tag->technology != tech) {
+        tag->technology = tech;
+        nfc_tag_client_queue_signal(self, TECHNOLOGY);
     }
     if (gutil_strv_equal(self->interfaces, interfaces)) {
         g_strfreev(interfaces);
@@ -541,6 +548,7 @@ nfc_tag_client_init_5(
     NfcTagClientObject* self = THIS(user_data);
     GError* error = NULL;
     gboolean present;
+    guint tech;
     gchar** interfaces;
     gchar** ndef_records;
     GVariant* dict;
@@ -548,9 +556,9 @@ nfc_tag_client_init_5(
     GASSERT(self->proxy_initializing);
     self->proxy_initializing = FALSE;
     if (org_sailfishos_nfc_tag_call_get_all3_finish(self->proxy,
-        NULL, &present, NULL, NULL, NULL, &interfaces,
+        NULL, &present, &tech, NULL, NULL, &interfaces,
         &ndef_records, &dict, result, &error)) {
-        nfc_tag_client_init_finished(self, present, interfaces,
+        nfc_tag_client_init_finished(self, present, tech, interfaces,
             ndef_records, dict);
         nfc_tag_client_update_valid_and_present(self);
     } else {
@@ -572,12 +580,13 @@ nfc_tag_client_init_4(
     NfcTagClientObject* self = THIS(user_data);
     GError* error = NULL;
     gboolean present;
+    guint tech;
     gchar** interfaces;
     gchar** ndef_records;
 
     GASSERT(self->proxy_initializing);
     if (!org_sailfishos_nfc_tag_call_get_all_finish(self->proxy,
-        &self->version, &present, NULL, NULL, NULL, &interfaces,
+        &self->version, &present, &tech, NULL, NULL, &interfaces,
         &ndef_records, result, &error)) {
         GERR("%s", GERRMSG(error));
         self->proxy_initializing = FALSE;
@@ -590,7 +599,7 @@ nfc_tag_client_init_4(
             nfc_tag_client_init_5, g_object_ref(self));
     } else {
         self->proxy_initializing = FALSE;
-        nfc_tag_client_init_finished(self, present, interfaces,
+        nfc_tag_client_init_finished(self, present, tech, interfaces,
             ndef_records, NULL);
         nfc_tag_client_update_valid_and_present(self);
         nfc_tag_client_emit_queued_signals(self);
