@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
- * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer
- *      in the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -81,21 +83,54 @@ typedef struct nfc_daemon_client_object {
     GError* settings_error;
 } NfcDaemonClientObject;
 
-typedef struct nfc_mode_request_impl {
+typedef struct nfc_request_type {
+    const char* Name;
+    const char* name;
+    void (*call_request)(
+        OrgSailfishosNfcDaemon* proxy,
+        guint on,
+        guint off,
+        GCancellable* cancel,
+        GAsyncReadyCallback callback,
+        gpointer user_data);
+    gboolean (*finish_request)(
+        OrgSailfishosNfcDaemon* proxy,
+        guint* id,
+        GAsyncResult* res,
+        GError** error);
+    void (*call_release)(
+        OrgSailfishosNfcDaemon* proxy,
+        guint id,
+        GCancellable* cancel,
+        GAsyncReadyCallback callback,
+        gpointer user_data);
+    gboolean (*finish_release)(
+        OrgSailfishosNfcDaemon* proxy,
+        GAsyncResult* res,
+        GError** error);
+} NfcRequestType;
+
+typedef struct nfc_request_impl {
     gint refcount;
-    NFC_MODE enable;
-    NFC_MODE disable;
+    guint on;
+    guint off;
     NfcDaemonClientObject* daemon;
     gulong present_id;
     gboolean pending;
     gboolean cancelled;
     guint id;
-} NfcModeRequestImpl;
+    const NfcRequestType* type;
+} NfcRequestImpl;
 
 typedef struct nfc_mode_request_priv {
     NfcModeRequest pub;
-    NfcModeRequestImpl* impl;
+    NfcRequestImpl* impl;
 } NfcModeRequestPriv;
+
+typedef struct nfc_tech_request_priv {
+    NfcTechRequest pub;
+    NfcRequestImpl* impl;
+} NfcTechRequestPriv;
 
 #define PARENT_CLASS nfc_daemon_client_object_parent_class
 #define THIS_TYPE nfc_daemon_client_object_get_type()
@@ -124,16 +159,6 @@ static NfcDaemonClientObject* nfc_daemon_client_instance = NULL;
 /*==========================================================================*
  * Implementation
  *==========================================================================*/
-
-static inline
-NfcModeRequestPriv*
-nfc_mode_request_cast(
-    NfcModeRequest* req)
-{
-    return G_LIKELY(req) ?
-        G_CAST(req, NfcModeRequestPriv, pub) :
-        NULL;
-}
 
 static inline
 NfcDaemonClientObject*
@@ -298,6 +323,21 @@ nfc_daemon_client_daemon_set_mode(
     }
 }
 
+static
+void
+nfc_daemon_client_daemon_set_techs(
+    NfcDaemonClientObject* self,
+    NFC_TECH techs)
+{
+    NfcDaemonClient* pub = &self->pub;
+
+    GDEBUG("NFC techs %02x", techs);
+    if (pub->techs != techs) {
+        pub->techs = techs;
+        nfc_daemon_client_queue_signal_(self, TECHS);
+    }
+}
+
 #if NFCDC_NEED_PEER_SERVICE
 
 static
@@ -323,6 +363,42 @@ nfc_daemon_client_register_service_done(
 }
 
 #endif /* NFCDC_NEED_PEER_SERVICE */
+
+static
+void
+nfc_daemon_client_daemon_get_all4_done(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcDaemonClientObject* self = THIS(user_data);
+    OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
+    GError* error = NULL;
+    gint iface_version = 0;
+    char** adapters = NULL;
+    gint version = 0;
+    guint mode = 0, techs = 0;
+
+    GASSERT(!self->proxy);
+    GASSERT(self->adapters_changed_id);
+    if (org_sailfishos_nfc_daemon_call_get_all4_finish(daemon,
+        &iface_version, &adapters, &version, &mode, &techs, result, &error)) {
+        GASSERT(iface_version >= 3);
+        nfc_daemon_client_daemon_set_version(self, version);
+        nfc_daemon_client_daemon_set_adapters(self, adapters);
+        nfc_daemon_client_daemon_set_mode(self, mode);
+        nfc_daemon_client_daemon_set_techs(self, techs);
+        self->proxy = daemon;
+    } else {
+        GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
+        nfc_daemon_client_set_daemon_error(self, error);
+        gutil_disconnect_handlers(daemon, &self->adapters_changed_id, 1);
+        g_object_unref(daemon);
+    }
+    nfc_daemon_client_update_valid_and_present(self);
+    nfc_daemon_client_emit_queued_signals(self);
+    g_object_unref(self);
+}
 
 static
 void
@@ -413,7 +489,10 @@ nfc_daemon_client_daemon_get_all_done(
 
         GDEBUG("NFC daemon interface version %d", iface_version);
         nfc_daemon_client_daemon_set_adapters(self, adapters);
-        if (iface_version >= 3) {
+        if (iface_version >= 4) {
+            org_sailfishos_nfc_daemon_call_get_all4(daemon, NULL,
+                nfc_daemon_client_daemon_get_all4_done, g_object_ref(self));
+        } else if (iface_version == 3) {
             org_sailfishos_nfc_daemon_call_get_all3(daemon, NULL,
                 nfc_daemon_client_daemon_get_all3_done, g_object_ref(self));
         } else if (iface_version == 2) {
@@ -693,13 +772,13 @@ nfc_daemon_client_settings_vanished(
 }
 
 /*==========================================================================*
- * NfcModeRequestImpl
+ * NfcRequestImpl
  *==========================================================================*/
 
 static
-NfcModeRequestImpl*
-nfc_mode_request_impl_ref(
-    NfcModeRequestImpl* impl)
+NfcRequestImpl*
+nfc_request_impl_ref(
+    NfcRequestImpl* impl)
 {
     GASSERT(impl->refcount > 0);
     g_atomic_int_inc(&impl->refcount);
@@ -708,8 +787,8 @@ nfc_mode_request_impl_ref(
 
 static
 void
-nfc_mode_request_impl_unref(
-    NfcModeRequestImpl* impl)
+nfc_request_impl_unref(
+    NfcRequestImpl* impl)
 {
     GASSERT(impl->refcount > 0);
     if (g_atomic_int_dec_and_test(&impl->refcount)) {
@@ -722,37 +801,39 @@ nfc_mode_request_impl_unref(
 
 static
 void
-nfc_mode_request_impl_release_done(
+nfc_request_impl_release_done(
     GObject* proxy,
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcModeRequestImpl* impl = user_data;
+    NfcRequestImpl* impl = user_data;
+    const NfcRequestType* type = impl->type;
     OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
     GError* error = NULL;
 
     GASSERT(impl->pending);
     impl->pending = FALSE;
 
-    if (org_sailfishos_nfc_daemon_call_release_mode_finish(daemon,
-        result, &error)) {
-        GDEBUG("Dropped mode request %u", impl->id);
+    if (type->finish_release(daemon, result, &error)) {
+        GDEBUG("Dropped %s request %u", type->name, impl->id);
     } else {
-        GERR("Failed to release NFC mode: %s", GERRMSG(error));
+        GERR("Failed to release %s request %u: %s", type->name, impl->id,
+            GERRMSG(error));
         g_error_free(error);
     }
 
-    nfc_mode_request_impl_unref(impl);
+    nfc_request_impl_unref(impl);
 }
 
 static
 void
-nfc_mode_request_impl_request_done(
+nfc_request_impl_request_done(
     GObject* proxy,
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcModeRequestImpl* impl = user_data;
+    NfcRequestImpl* impl = user_data;
+    const NfcRequestType* type = impl->type;
     OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
     GError* error = NULL;
     guint id = 0;
@@ -760,44 +841,41 @@ nfc_mode_request_impl_request_done(
     GASSERT(impl->pending);
     impl->pending = FALSE;
 
-    if (org_sailfishos_nfc_daemon_call_request_mode_finish(daemon, &id,
-        result, &error)) {
+    if (type->finish_request(daemon, &id, result, &error)) {
         if (impl->cancelled) {
-            GDEBUG("Mode request id %u (cancelled)", id);
+            GDEBUG("%s request id %u (cancelled)", type->Name, id);
             impl->pending = TRUE;
-            org_sailfishos_nfc_daemon_call_release_mode(daemon, id, NULL,
-                nfc_mode_request_impl_release_done,
-                nfc_mode_request_impl_ref(impl));
+            type->call_release(daemon, id, NULL,
+                nfc_request_impl_release_done, nfc_request_impl_ref(impl));
         } else {
-            GDEBUG("Mode request id %u", id);
+            GDEBUG("%s request id %u", type->Name, id);
             impl->id = id;
         }
     } else {
-        GERR("Failed to request NFC mode: %s", GERRMSG(error));
+        GERR("Failed to request %s: %s", GERRMSG(error), type->name);
         g_error_free(error);
     }
 
-    nfc_mode_request_impl_unref(impl);
+    nfc_request_impl_unref(impl);
 }
 
 static
 void
-nfc_mode_request_impl_present_changed(
+nfc_request_impl_present_changed(
     NfcDaemonClient* daemon,
     NFC_DAEMON_PROPERTY property,
     void* user_data)
 {
-    NfcModeRequestImpl* impl = user_data;
+    NfcRequestImpl* impl = user_data;
 
     if (daemon->present) {
         if (!impl->id && !impl->cancelled && !impl->pending) {
             NfcDaemonClientObject* self = impl->daemon;
+            const NfcRequestType* type = impl->type;
 
             impl->pending = TRUE;
-            org_sailfishos_nfc_daemon_call_request_mode(self->proxy,
-                impl->enable, impl->disable, NULL,
-                nfc_mode_request_impl_request_done,
-                nfc_mode_request_impl_ref(impl));
+            type->call_request(self->proxy, impl->on, impl->off, NULL,
+                nfc_request_impl_request_done, nfc_request_impl_ref(impl));
         }
     } else {
         impl->id = 0;
@@ -805,30 +883,52 @@ nfc_mode_request_impl_present_changed(
 }
 
 static
-NfcModeRequestImpl*
-nfc_mode_request_impl_new(
+NfcRequestImpl*
+nfc_request_impl_new(
     NfcDaemonClientObject* self,
-    NFC_MODE enable,
-    NFC_MODE disable)
+    const NfcRequestType* type,
+    guint enable,
+    guint disable)
 {
-    NfcModeRequestImpl* impl = g_slice_new0(NfcModeRequestImpl);
+    NfcRequestImpl* impl = g_slice_new0(NfcRequestImpl);
     NfcDaemonClient* client = &self->pub;
 
     g_atomic_int_set(&impl->refcount, 1);
     g_object_ref(impl->daemon = self);
-    impl->enable = enable;
-    impl->disable = disable;
+    impl->on = enable;
+    impl->off = disable;
+    impl->type = type;
     impl->present_id = nfc_daemon_client_add_property_handler(client,
-        NFC_DAEMON_PROPERTY_PRESENT, nfc_mode_request_impl_present_changed,
+        NFC_DAEMON_PROPERTY_PRESENT, nfc_request_impl_present_changed,
         impl);
     if (client->present) {
         impl->pending = TRUE;
-        org_sailfishos_nfc_daemon_call_request_mode(self->proxy,
-            impl->enable, impl->disable, NULL,
-            nfc_mode_request_impl_request_done,
-            nfc_mode_request_impl_ref(impl));
+        type->call_request(self->proxy, impl->on, impl->off, NULL,
+            nfc_request_impl_request_done, nfc_request_impl_ref(impl));
     }
     return impl;
+}
+
+static
+void
+nfc_request_impl_drop(
+    NfcRequestImpl* impl)
+{
+    const NfcRequestType* type = impl->type;
+
+    if (impl->pending) {
+        impl->cancelled = TRUE;
+        GDEBUG("Canceling pending %s request", type->name);
+    } else if (impl->id) {
+        NfcDaemonClientObject* self = impl->daemon;
+
+        GDEBUG("Releasing %s request %u", type->name, impl->id);
+        impl->pending = TRUE;
+        type->call_release(self->proxy, impl->id, NULL,
+            nfc_request_impl_release_done, nfc_request_impl_ref(impl));
+    }
+
+    nfc_request_impl_unref(impl);
 }
 
 /*==========================================================================*
@@ -986,12 +1086,22 @@ nfc_mode_request_new(
     NfcDaemonClientObject* self = nfc_daemon_client_object_cast(daemon);
 
     if (G_LIKELY(self)) {
+        static const NfcRequestType mode_request_type = {
+            "Mode",
+            "mode",
+            org_sailfishos_nfc_daemon_call_request_mode,
+            org_sailfishos_nfc_daemon_call_request_mode_finish,
+            org_sailfishos_nfc_daemon_call_release_mode,
+            org_sailfishos_nfc_daemon_call_release_mode_finish
+        };
+
         NfcModeRequestPriv* priv = g_slice_new(NfcModeRequestPriv);
         NfcModeRequest* req = &priv->pub;
 
         req->enable = enable;
         req->disable = disable;
-        priv->impl = nfc_mode_request_impl_new(self, enable, disable);
+        priv->impl = nfc_request_impl_new(self, &mode_request_type,
+            enable, disable);
         return req;
     }
     return NULL;
@@ -1001,24 +1111,52 @@ void
 nfc_mode_request_free(
     NfcModeRequest* req)  /* Since 1.0.6 */
 {
-    NfcModeRequestPriv* priv = nfc_mode_request_cast(req);
+    if (req) {
+        NfcModeRequestPriv* priv = G_CAST(req, NfcModeRequestPriv, pub);
 
-    if (priv) {
-        NfcModeRequestImpl* impl = priv->impl;
-        NfcDaemonClientObject* self = impl->daemon;
+        nfc_request_impl_drop(priv->impl);
+        gutil_slice_free(priv);
+    }
+}
 
-        if (impl->pending) {
-            impl->cancelled = TRUE;
-            GDEBUG("Canceling pending mode request");
-        } else if (impl->id) {
-            GDEBUG("Releasing mode request %u", impl->id);
-            impl->pending = TRUE;
-            org_sailfishos_nfc_daemon_call_release_mode(self->proxy,
-                impl->id, NULL, nfc_mode_request_impl_release_done,
-                nfc_mode_request_impl_ref(impl));
-        }
+NfcTechRequest*
+nfc_tech_request_new(
+    NfcDaemonClient* daemon,
+    NFC_TECH allow,
+    NFC_TECH disallow)  /* Since 1.2.0 */
+{
+    NfcDaemonClientObject* self = nfc_daemon_client_object_cast(daemon);
 
-        nfc_mode_request_impl_unref(priv->impl);
+    if (G_LIKELY(self)) {
+        static const NfcRequestType tech_request_type = {
+            "Tech",
+            "tech",
+            org_sailfishos_nfc_daemon_call_request_techs,
+            org_sailfishos_nfc_daemon_call_request_techs_finish,
+            org_sailfishos_nfc_daemon_call_release_techs,
+            org_sailfishos_nfc_daemon_call_release_techs_finish
+        };
+
+        NfcTechRequestPriv* priv = g_slice_new(NfcTechRequestPriv);
+        NfcTechRequest* req = &priv->pub;
+
+        req->allow = allow;
+        req->disallow = disallow;
+        priv->impl = nfc_request_impl_new(self, &tech_request_type,
+            allow, disallow);
+        return req;
+    }
+    return NULL;
+}
+
+void
+nfc_tech_request_free(
+    NfcTechRequest* req)  /* Since 1.2.0 */
+{
+    if (req) {
+        NfcTechRequestPriv* priv = G_CAST(req, NfcTechRequestPriv, pub);
+
+        nfc_request_impl_drop(priv->impl);
         gutil_slice_free(priv);
     }
 }
