@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2021-2024 Slava Monich <slava@monich.com>
  * Copyright (C) 2021 Jolla Ltd.
- * Copyright (C) 2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer
- *      in the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -66,12 +68,14 @@ typedef struct nfc_peer_client_object {
     gboolean proxy_initializing;
 } NfcPeerClientObject;
 
-G_DEFINE_TYPE(NfcPeerClientObject, nfc_peer_client_object, \
-    NFC_CLIENT_TYPE_BASE)
 #define PARENT_CLASS nfc_peer_client_object_parent_class
 #define THIS_TYPE nfc_peer_client_object_get_type()
-#define THIS(obj) G_TYPE_CHECK_INSTANCE_CAST((obj), THIS_TYPE, \
+#define THIS(obj) G_TYPE_CHECK_INSTANCE_CAST(obj, THIS_TYPE, \
     NfcPeerClientObject)
+
+GType THIS_TYPE G_GNUC_INTERNAL;
+G_DEFINE_TYPE(NfcPeerClientObject, nfc_peer_client_object, \
+    NFC_CLIENT_TYPE_BASE)
 
 NFC_CLIENT_BASE_ASSERT_COUNT(NFC_PEER_PROPERTY_VALID);
 NFC_CLIENT_BASE_ASSERT_COUNT(NFC_PEER_PROPERTY_COUNT);
@@ -299,7 +303,7 @@ nfc_peer_client_connect_done(
         g_variant_unref(fd);
         g_object_unref(fdl);
     } else {
-        if (error->code == G_IO_ERROR_CANCELLED) {
+        if (g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
             GDEBUG("Connection cancelled");
         } else {
             GERR("%s", GERRMSG(error));
@@ -402,7 +406,8 @@ nfc_peer_client_connect_sap(
 {
     NfcPeerClientObject* self = nfc_peer_client_object_cast(peer);
 
-    if (G_LIKELY(self) && G_LIKELY(rsap) && G_LIKELY(self->proxy)) {
+    if (G_LIKELY(self) && G_LIKELY(rsap) && G_LIKELY(self->proxy) &&
+        (!cancel || !g_cancellable_is_cancelled(cancel))) {
         NfcPeerClientConnectData* data = NULL;
         GAsyncReadyCallback complete = NULL;
 
@@ -420,8 +425,13 @@ nfc_peer_client_connect_sap(
         org_sailfishos_nfc_peer_call_connect_access_point(self->proxy, rsap,
             NULL, cancel, complete, data);
         return TRUE;
+    } else {
+        /* Destroy callback is always invoked even if we return FALSE */
+        if (destroy) {
+            destroy(user_data);
+        }
+        return FALSE;
     }
-    return FALSE;
 }
 
 gboolean
@@ -435,7 +445,8 @@ nfc_peer_client_connect_sn(
 {
     NfcPeerClientObject* self = nfc_peer_client_object_cast(peer);
 
-    if (G_LIKELY(self) && G_LIKELY(sn) && G_LIKELY(self->proxy)) {
+    if (G_LIKELY(self) && G_LIKELY(sn) && G_LIKELY(self->proxy) &&
+        (!cancel || !g_cancellable_is_cancelled(cancel))) {
         NfcPeerClientConnectData* data = NULL;
         GAsyncReadyCallback complete = NULL;
 
@@ -453,8 +464,13 @@ nfc_peer_client_connect_sn(
         org_sailfishos_nfc_peer_call_connect_service_name(self->proxy, sn,
             NULL, cancel, complete, data);
         return TRUE;
+    } else {
+        /* Destroy callback is always invoked even if we return FALSE */
+        if (destroy) {
+            destroy(user_data);
+        }
+        return FALSE;
     }
-    return FALSE;
 }
 
 gulong
