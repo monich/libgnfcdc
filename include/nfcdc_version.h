@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
- * Copyright (C) 2019-2022 Jolla Ltd.
+ * Copyright (C) 2024 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -37,51 +36,33 @@
  * any official policies, either expressed or implied.
  */
 
-#ifndef NFCDC_TYPES_H
-#define NFCDC_TYPES_H
+#ifndef NFCDC_VERSION_H
+#define NFCDC_VERSION_H
 
-#include <gutil_types.h>
+/* Since 1.2.0 */
 
-#include "nfcdc_version.h"
+#define NFCDC_VERSION_MAJOR   1
+#define NFCDC_VERSION_MINOR   0
+#define NFCDC_VERSION_RELEASE 10
+#define NFCDC_VERSION_STRING  "1.0.10"
 
-G_BEGIN_DECLS
+#define NFCDC_VERSION_WORD(v1,v2,v3) \
+    ((((v1) & 0x7f) << 24) | \
+     (((v2) & 0xfff) << 12) | \
+      ((v3) & 0xfff))
 
-#define NFCDC_LOG_MODULE nfcdc_log
+#define NFCDC_VERSION_GET_MAJOR(v)  (((v) >> 24) & 0x7f)
+#define NFCDC_VERSION_GET_MINOR(v)  (((v) >> 12) & 0xfff)
+#define NFCDC_VERSION_GET_RELEASE(v) ((v) & 0xfff)
 
-typedef struct nfc_adapter_client NfcAdapterClient;
-typedef struct nfc_daemon_client NfcDaemonClient;
-typedef struct nfc_default_adapter NfcDefaultAdapter;
-typedef struct nfc_isodep_apdu NfcIsoDepApdu;
-typedef struct nfc_isodep_client NfcIsoDepClient;
-typedef struct nfc_mode_request NfcModeRequest; /* Since 1.0.6 */
-typedef struct nfc_service_connection NfcServiceConnection;  /* Since 1.0.6 */
-typedef struct nfc_peer_client NfcPeerClient; /* Since 1.0.6 */
-typedef struct nfc_peer_service NfcPeerService; /* Since 1.0.6 */
-typedef struct nfc_tag_client NfcTagClient;
-typedef struct nfc_tech_request NfcTechRequest; /* Since 1.2.0 */
+/* Current version as a single word */
+#define NFCDC_VERSION NFCDC_VERSION_WORD\
+    (NFCDC_VERSION_MAJOR, NFCDC_VERSION_MINOR, NFCDC_VERSION_RELEASE)
 
-typedef enum nfc_daemon_mode {
-    NFC_MODE_NONE           = 0x00,
-    /* Polling */
-    NFC_MODE_P2P_INITIATOR  = 0x01,
-    NFC_MODE_READER_WRITER  = 0x02,
-    /* Listening */
-    NFC_MODE_P2P_TARGET     = 0x04,
-    NFC_MODE_CARD_EMILATION = 0x08
-} NFC_MODE; /* Since 1.0.6 */
+/* Specific versions */
+#define NFCDC_VERSION_1_2_0 NFCDC_VERSION_WORD(1,2,0)
 
-typedef enum nfc_tech {
-    NFC_TECH_NONE = 0,
-    NFC_TECH_A = 0x01,
-    NFC_TECH_B = 0x02,
-    NFC_TECH_F = 0x04
-} NFC_TECH; /* Since 1.2.0 */
-
-extern GLogModule NFCDC_LOG_MODULE;
-
-G_END_DECLS
-
-#endif /* NFCDC_TYPES_H */
+#endif /* NFCDC_VERSION_H */
 
 /*
  * Local Variables:

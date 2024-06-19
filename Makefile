@@ -1,7 +1,7 @@
 # -*- Mode: makefile-gmake -*-
 
-.PHONY: clean all debug release coverage pkgconfig install install-dev
-.PHONY: print_debug_lib print_release_lib print_coverage_lib
+.PHONY: clean all debug pkgconfig install install-dev
+.PHONY: print_debug_lib print_release_lib
 .PHONY: print_debug_link print_release_link
 .PHONY: print_debug_path print_release_path
 
@@ -18,12 +18,27 @@ PKGS = glib-2.0 gio-2.0 gio-unix-2.0 libglibutil
 all: debug release pkgconfig
 
 #
-# Library version
+# Directories
 #
 
-VERSION_MAJOR = 1
-VERSION_MINOR = 0
-VERSION_RELEASE = 10
+SRC_DIR = src
+INCLUDE_DIR = include
+BUILD_DIR = build
+GEN_DIR = $(BUILD_DIR)
+SPEC_DIR = spec
+DEBUG_BUILD_DIR = $(BUILD_DIR)/debug
+RELEASE_BUILD_DIR = $(BUILD_DIR)/release
+
+#
+# Pull library version from nfcdc_version.h
+#
+
+VERSION_FILE = $(INCLUDE_DIR)/nfcdc_version.h
+get_version = $(shell grep -E '^.+define +NFCDC_VERSION_$1 +[0-9]+$$' $(VERSION_FILE) | sed 's/  */ /g' | cut -d ' ' -f 3)
+
+VERSION_MAJOR = $(call get_version,MAJOR)
+VERSION_MINOR = $(call get_version,MINOR)
+VERSION_RELEASE = $(call get_version,RELEASE)
 
 # Version for pkg-config
 PCVERSION = $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_RELEASE)
@@ -68,19 +83,6 @@ GEN_SRC = \
   org.sailfishos.nfc.Tag.c
 
 #
-# Directories
-#
-
-SRC_DIR = src
-INCLUDE_DIR = include
-BUILD_DIR = build
-GEN_DIR = $(BUILD_DIR)
-SPEC_DIR = spec
-DEBUG_BUILD_DIR = $(BUILD_DIR)/debug
-RELEASE_BUILD_DIR = $(BUILD_DIR)/release
-COVERAGE_BUILD_DIR = $(BUILD_DIR)/coverage
-
-#
 # Tools and flags
 #
 
@@ -98,7 +100,6 @@ FULL_LDFLAGS = $(BASE_FLAGS) $(LDFLAGS) -shared -Wl,-soname=$(LIB_SONAME) \
 LIBS = $(shell pkg-config --libs $(PKGS))
 DEBUG_FLAGS = -g
 RELEASE_FLAGS = -flto
-COVERAGE_FLAGS = -g
 
 KEEP_SYMBOLS ?= 0
 ifneq ($(KEEP_SYMBOLS),0)
@@ -109,7 +110,6 @@ DEBUG_LDFLAGS = $(FULL_LDFLAGS) $(DEBUG_FLAGS)
 RELEASE_LDFLAGS = $(FULL_LDFLAGS) $(RELEASE_FLAGS)
 DEBUG_CFLAGS = $(FULL_CFLAGS) $(DEBUG_FLAGS) -DDEBUG
 RELEASE_CFLAGS = $(FULL_CFLAGS) $(RELEASE_FLAGS) -O2 -ffat-lto-objects
-COVERAGE_CFLAGS = $(FULL_CFLAGS) $(COVERAGE_FLAGS) --coverage
 
 #
 # Files
@@ -123,9 +123,6 @@ DEBUG_OBJS = \
 RELEASE_OBJS = \
   $(GEN_SRC:%.c=$(RELEASE_BUILD_DIR)/%.o) \
   $(SRC:%.c=$(RELEASE_BUILD_DIR)/%.o)
-COVERAGE_OBJS = \
-  $(GEN_SRC:%.c=$(COVERAGE_BUILD_DIR)/%.o) \
-  $(SRC:%.c=$(COVERAGE_BUILD_DIR)/%.o)
 GEN_FILES = $(GEN_SRC:%=$(GEN_DIR)/%)
 .PRECIOUS: $(GEN_FILES)
 
@@ -135,13 +132,12 @@ DEBUG_LINK = $(DEBUG_BUILD_DIR)/$(LIB_SYMLINK1)
 RELEASE_LINK = $(RELEASE_BUILD_DIR)/$(LIB_SYMLINK1)
 DEBUG_STATIC_LIB = $(DEBUG_BUILD_DIR)/$(STATIC_LIB)
 RELEASE_STATIC_LIB = $(RELEASE_BUILD_DIR)/$(STATIC_LIB)
-COVERAGE_STATIC_LIB = $(COVERAGE_BUILD_DIR)/$(STATIC_LIB)
 
 #
 # Dependencies
 #
 
-DEPS = $(DEBUG_OBJS:%.o=%.d) $(RELEASE_OBJS:%.o=%.d) $(COVERAGE_OBJS:%.o=%.d)
+DEPS = $(DEBUG_OBJS:%.o=%.d) $(RELEASE_OBJS:%.o=%.d)
 ifneq ($(MAKECMDGOALS),clean)
 ifneq ($(strip $(DEPS)),)
 -include $(DEPS)
@@ -152,7 +148,6 @@ $(PKGCONFIG): | $(BUILD_DIR)
 $(GEN_FILES): | $(GEN_DIR)
 $(DEBUG_OBJS): | $(DEBUG_BUILD_DIR) $(GEN_FILES)
 $(RELEASE_OBJS): | $(RELEASE_BUILD_DIR) $(GEN_FILES)
-$(COVERAGE_OBJS): | $(COVERAGE_BUILD_DIR) $(GEN_FILES)
 
 #
 # Rules
@@ -167,8 +162,6 @@ debug: $(DEBUG_STATIC_LIB) $(DEBUG_LIB) $(DEBUG_LINK)
 
 release: $(RELEASE_STATIC_LIB) $(RELEASE_LIB) $(RELEASE_LINK)
 
-coverage: $(COVERAGE_STATIC_LIB)
-
 pkgconfig: $(PKGCONFIG)
 
 print_debug_lib:
@@ -179,9 +172,6 @@ print_release_lib:
 
 print_debug_link:
 	@echo $(DEBUG_LINK)
-
-print_coverage_lib:
-	@echo $(COVERAGE_STATIC_LIB)
 
 print_release_link:
 	@echo $(RELEASE_LINK)
@@ -208,9 +198,6 @@ $(DEBUG_BUILD_DIR):
 $(RELEASE_BUILD_DIR):
 	mkdir -p $@
 
-$(COVERAGE_BUILD_DIR):
-	mkdir -p $@
-
 $(GEN_DIR)/%.c: $(SPEC_DIR)/%.xml
 	gdbus-codegen --generate-c-code $(@:%.c=%) $<
 
@@ -220,17 +207,11 @@ $(DEBUG_BUILD_DIR)/%.o : $(GEN_DIR)/%.c
 $(RELEASE_BUILD_DIR)/%.o : $(GEN_DIR)/%.c
 	$(CC) -c -I. $(RELEASE_CFLAGS) -MT"$@" -MF"$(@:%.o=%.d)" $< -o $@
 
-$(COVERAGE_BUILD_DIR)/%.o : $(GEN_DIR)/%.c
-	$(CC) -c -I. $(COVERAGE_CFLAGS) -MT"$@" -MF"$(@:%.o=%.d)" $< -o $@
-
 $(DEBUG_BUILD_DIR)/%.o : $(SRC_DIR)/%.c
 	$(CC) -c $(DEBUG_CFLAGS) -MT"$@" -MF"$(@:%.o=%.d)" $< -o $@
 
 $(RELEASE_BUILD_DIR)/%.o : $(SRC_DIR)/%.c
 	$(CC) -c $(RELEASE_CFLAGS) -MT"$@" -MF"$(@:%.o=%.d)" $< -o $@
-
-$(COVERAGE_BUILD_DIR)/%.o : $(SRC_DIR)/%.c
-	$(CC) -c $(COVERAGE_CFLAGS) -MT"$@" -MF"$(@:%.o=%.d)" $< -o $@
 
 $(DEBUG_LIB): $(DEBUG_OBJS)
 	$(LD) $(DEBUG_LDFLAGS) $^ $(LIBS) -o $@
@@ -245,9 +226,6 @@ $(DEBUG_STATIC_LIB): $(DEBUG_OBJS)
 	$(AR) rc $@ $?
 
 $(RELEASE_STATIC_LIB): $(RELEASE_OBJS)
-	$(AR) rc $@ $?
-
-$(COVERAGE_STATIC_LIB): $(COVERAGE_OBJS)
 	$(AR) rc $@ $?
 
 $(DEBUG_BUILD_DIR)/$(LIB_SYMLINK1): $(DEBUG_BUILD_DIR)/$(LIB_SYMLINK2)
