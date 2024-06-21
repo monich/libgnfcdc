@@ -83,6 +83,23 @@ typedef struct nfc_daemon_client_object {
     GError* settings_error;
 } NfcDaemonClientObject;
 
+typedef
+gboolean
+(*NfcDaemonClientCallFinishFunc)(
+    OrgSailfishosNfcDaemon* proxy,
+    GAsyncResult* res,
+    GError** error);
+
+typedef struct nfc_daemon_client_call_data {
+    NfcDaemonClientObject* obj;
+    NfcDaemonClientCallFunc callback;
+    NfcDaemonClientCallFinishFunc finish;
+    GDestroyNotify destroy;
+    void* user_data;
+    GCancellable* cancel;
+    gulong cancel_id;
+} NfcDaemonClientCallData;
+
 typedef struct nfc_request_type {
     const char* Name;
     const char* name;
@@ -168,6 +185,74 @@ nfc_daemon_client_object_cast(
     return G_LIKELY(pub) ?
         THIS(G_CAST(pub, NfcDaemonClientObject, pub)) :
         NULL;
+}
+
+static
+void
+nfc_daemon_client_call_cancelled(
+    GCancellable* cancel,
+    NfcDaemonClientCallData* data)
+{
+    data->callback = NULL;
+}
+
+static
+NfcDaemonClientCallData*
+nfc_daemon_client_call_new(
+    NfcDaemonClientObject* self,
+    NfcDaemonClientCallFinishFunc finish,
+    GCancellable* cancel,
+    NfcDaemonClientCallFunc callback,
+    void* user_data,
+    GDestroyNotify destroy)
+{
+    NfcDaemonClientCallData* call = g_slice_new0(NfcDaemonClientCallData);
+
+    g_object_ref(call->obj = self);
+    call->callback = callback;
+    call->destroy = destroy;
+    call->user_data = user_data;
+    call->finish = finish;
+    if (cancel) {
+        g_object_ref(call->cancel = cancel);
+        call->cancel_id = g_cancellable_connect(cancel,
+            G_CALLBACK(nfc_daemon_client_call_cancelled), call, NULL);
+    }
+    return call;
+}
+
+static
+void
+nfc_daemon_client_call_done(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcDaemonClientCallData* call = user_data;
+    NfcDaemonClientObject* self = call->obj;
+    GError* error = NULL;
+
+    if (!call->finish(ORG_SAILFISHOS_NFC_DAEMON(proxy), result, &error)) {
+        GWARN("%s", GERRMSG(error));
+    }
+    if (call->callback) {
+        NfcDaemonClientCallFunc callback = call->callback;
+
+        call->callback = NULL;
+        callback(&self->pub, error, call->user_data);
+    }
+    if (error) {
+        g_error_free(error);
+    }
+    if (call->cancel) {
+        g_signal_handler_disconnect(call->cancel, call->cancel_id);
+        g_object_unref(call->cancel);
+    }
+    if (call->destroy) {
+        call->destroy(call->user_data);
+    }
+    g_object_unref(self);
+    gutil_slice_free(call);
 }
 
 static
@@ -1038,6 +1123,68 @@ nfc_daemon_client_unref(
 {
     if (G_LIKELY(daemon)) {
         g_object_unref(nfc_daemon_client_object_cast(daemon));
+    }
+}
+
+gboolean
+nfc_daemon_client_register_local_host_service(
+    NfcDaemonClient* daemon,
+    const char* path,
+    const char* name,
+    GCancellable* cancel,
+    NfcDaemonClientCallFunc callback,
+    void* user_data,
+    GDestroyNotify destroy) /* Since 1.2.0 */
+{
+    NfcDaemonClientObject* self = nfc_daemon_client_object_cast(daemon);
+
+    if (G_LIKELY(self) && G_LIKELY(path) && g_variant_is_object_path(path) &&
+        daemon->valid && daemon->present && (!cancel ||
+        !g_cancellable_is_cancelled(cancel))) {
+        NfcDaemonClientCallData* call = nfc_daemon_client_call_new(self,
+            org_sailfishos_nfc_daemon_call_register_local_host_service_finish,
+            cancel, callback, user_data, destroy);
+
+        org_sailfishos_nfc_daemon_call_register_local_host_service
+            (self->proxy, path, name ? name : "", cancel,
+                nfc_daemon_client_call_done, call);
+        return TRUE;
+    } else {
+        /* Destroy callback is always invoked even if we return FALSE */
+        if (destroy) {
+            destroy(user_data);
+        }
+        return FALSE;
+    }
+}
+
+gboolean
+nfc_daemon_client_unregister_local_host_service(
+    NfcDaemonClient* daemon,
+    const char* path,
+    GCancellable* cancel,
+    NfcDaemonClientCallFunc callback,
+    void* user_data,
+    GDestroyNotify destroy) /* Since 1.2.0 */
+{
+    NfcDaemonClientObject* self = nfc_daemon_client_object_cast(daemon);
+
+    if (G_LIKELY(self) && G_LIKELY(path) && g_variant_is_object_path(path) &&
+        daemon->valid && daemon->present && (!cancel ||
+        !g_cancellable_is_cancelled(cancel))) {
+        NfcDaemonClientCallData* call = nfc_daemon_client_call_new(self,
+            org_sailfishos_nfc_daemon_call_unregister_local_host_service_finish,
+            cancel, callback, user_data, destroy);
+
+        org_sailfishos_nfc_daemon_call_unregister_local_host_service
+            (self->proxy, path, cancel, nfc_daemon_client_call_done, call);
+        return TRUE;
+    } else {
+        /* Destroy callback is always invoked even if we return FALSE */
+        if (destroy) {
+            destroy(user_data);
+        }
+        return FALSE;
     }
 }
 

@@ -42,6 +42,8 @@
 
 #include <nfcdc_types.h>
 
+#include <gio/gio.h>
+
 G_BEGIN_DECLS
 
 typedef enum nfc_daemon_property {
@@ -85,6 +87,13 @@ struct nfc_daemon_client {
 
 typedef
 void
+(*NfcDaemonClientCallFunc)(
+    NfcDaemonClient* daemon,
+    const GError* error,
+    void* user_data); /* Since 1.2.0 */
+
+typedef
+void
 (*NfcDaemonPropertyFunc)(
     NfcDaemonClient* daemon,
     NFC_DAEMON_PROPERTY property,
@@ -101,6 +110,25 @@ nfc_daemon_client_ref(
 void
 nfc_daemon_client_unref(
     NfcDaemonClient* daemon);
+
+gboolean
+nfc_daemon_client_register_local_host_service(
+    NfcDaemonClient* daemon,
+    const char* path,
+    const char* name,
+    GCancellable* cancel,
+    NfcDaemonClientCallFunc callback,
+    void* user_data,
+    GDestroyNotify destroy); /* Since 1.2.0 */
+
+gboolean
+nfc_daemon_client_unregister_local_host_service(
+    NfcDaemonClient* daemon,
+    const char* path,
+    GCancellable* cancel,
+    NfcDaemonClientCallFunc callback,
+    void* user_data,
+    GDestroyNotify destroy); /* Since 1.2.0 */
 
 gulong
 nfc_daemon_client_add_property_handler(
