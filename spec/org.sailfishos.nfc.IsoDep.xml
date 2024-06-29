@@ -50,5 +50,7 @@
       <arg name="parameters" type="a{sv}" direction="out"/>
     </method>
     -->
+    <!-- Interface version 3 -->
+    <method name="Reset"/>
   </interface>
 </node>

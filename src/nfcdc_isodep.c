@@ -83,14 +83,29 @@ NFC_CLIENT_BASE_ASSERT_COUNT(NFC_ISODEP_PROPERTY_COUNT);
 #define nfc_isodep_client_queue_signal(self,NAME) \
     ((self)->base.queued_signals |= SIGNAL_BIT_(NAME))
 
-typedef struct nfc_isodep_transmit_data {
+typedef struct nfc_isodep_client_call NfcIsoDepClientCall;
+
+typedef
+gboolean
+(*NfcIsoDepClientCallFinishFunc)(
+    OrgSailfishosNfcIsoDep* proxy,
+    NfcIsoDepClientCall* call,
+    GAsyncResult* result,
+    GError** error);
+
+struct nfc_isodep_client_call {
     NfcIsoDepClientObject* object;
-    NfcIsoDepTransmitFunc callback;
+    NfcIsoDepClientCallFinishFunc finish;
+    union {
+        GCallback cb;
+        NfcIsoDepCompleteFunc generic;
+        NfcIsoDepTransmitFunc transmit;
+    } complete;
     GDestroyNotify destroy;
     void* user_data;
     GCancellable* cancel;
     gulong cancel_id;
-} NfcIsoDepTransmitData;
+};
 
 #define NFC_ISODEP_ACT_PARAM_UNKNOWN NFC_ISODEP_ACT_PARAM_COUNT
 
@@ -144,56 +159,118 @@ nfc_isodep_client_act_param_key(
 
 static
 void
-nfc_isodep_client_transmit_cancelled(
+nfc_isodep_client_call_cancelled(
     GCancellable* cancel,
-    NfcIsoDepTransmitData* data)
+    NfcIsoDepClientCall* call)
 {
-    data->callback = NULL;
+    call->complete.cb = NULL;
+}
+
+static
+NfcIsoDepClientCall*
+nfc_isodep_client_call_new(
+    NfcIsoDepClientObject* self,
+    NfcIsoDepClientCallFinishFunc finish,
+    GCancellable* cancel,
+    GCallback complete,
+    void* user_data,
+    GDestroyNotify destroy)
+{
+    NfcIsoDepClientCall* call = g_slice_new0(NfcIsoDepClientCall);
+
+    g_object_ref(call->object = self);
+    call->finish = finish;
+    call->complete.cb = complete;
+    call->user_data = user_data;
+    call->destroy = destroy;
+    if (cancel) {
+        g_object_ref(call->cancel = cancel);
+        call->cancel_id = g_cancellable_connect(cancel,
+            G_CALLBACK(nfc_isodep_client_call_cancelled), call, NULL);
+    }
+    return call;
 }
 
 static
 void
-nfc_isodep_client_transmit_done(
+nfc_isodep_client_call_done(
     GObject* proxy,
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcIsoDepTransmitData* data = user_data;
-    GVariant* response = NULL;
+    NfcIsoDepClientCall* call = user_data;
     GError* error = NULL;
-    guchar sw1 = 0, sw2 = 0;
 
-    org_sailfishos_nfc_iso_dep_call_transmit_finish(ORG_SAILFISHOS_NFC_ISO_DEP
-        (proxy), &response, &sw1, &sw2, result, &error);
-    if (data->cancel) {
-        g_signal_handler_disconnect(data->cancel, data->cancel_id);
-        g_object_unref(data->cancel);
+    if (call->cancel) {
+        g_signal_handler_disconnect(call->cancel, call->cancel_id);
+        g_object_unref(call->cancel);
+        call->cancel = NULL;
     }
-    if (data->callback) {
-        NfcIsoDepTransmitFunc callback = data->callback;
-        NfcIsoDepClient* isodep = &data->object->pub;
-        const GUtilData* resp;
-        GUtilData d;
-
-        if (error) {
-            resp = NULL;
-        } else {
-            d.bytes = g_variant_get_fixed_array(response, &d.size, 1);
-            resp = &d;
-        }
-        data->callback = NULL;
-        callback(isodep, resp, NFC_ISODEP_SW(sw1, sw2), error, data->user_data);
-    }
-    if (data->destroy) {
-        data->destroy(data->user_data);
+    call->finish(ORG_SAILFISHOS_NFC_ISO_DEP(proxy), call, result, &error);
+    if (call->destroy) {
+        call->destroy(call->user_data);
     }
     if (error) {
         g_error_free(error);
-    } else {
-        g_variant_unref(response);
     }
-    g_object_unref(data->object);
-    gutil_slice_free(data);
+    g_object_unref(call->object);
+    gutil_slice_free(call);
+}
+
+static
+gboolean
+nfc_isodep_client_transmit_finish(
+    OrgSailfishosNfcIsoDep* proxy,
+    NfcIsoDepClientCall* call,
+    GAsyncResult* result,
+    GError** error)
+{
+    GVariant* response = NULL;
+    guchar sw1 = 0, sw2 = 0;
+    gboolean ok = org_sailfishos_nfc_iso_dep_call_transmit_finish(proxy,
+        &response, &sw1, &sw2, result, error);
+
+    if (call->complete.transmit) {
+        NfcIsoDepTransmitFunc callback = call->complete.transmit;
+        NfcIsoDepClient* isodep = &call->object->pub;
+        const GUtilData* resp;
+        GUtilData d;
+
+        if (ok) {
+            d.bytes = g_variant_get_fixed_array(response, &d.size, 1);
+            resp = &d;
+        } else {
+            resp = NULL;
+        }
+        call->complete.transmit = NULL;
+        callback(isodep, resp, NFC_ISODEP_SW(sw1, sw2), *error, call->user_data);
+    }
+    if (ok) {
+        g_variant_unref(response);
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+static
+gboolean
+nfc_isodep_client_reset_finish(
+    OrgSailfishosNfcIsoDep* proxy,
+    NfcIsoDepClientCall* call,
+    GAsyncResult* result,
+    GError** error)
+{
+    gboolean ok = org_sailfishos_nfc_iso_dep_call_reset_finish(proxy, result,
+        error);
+
+    if (call->complete.generic) {
+        NfcIsoDepCompleteFunc complete = call->complete.generic;
+
+        call->complete.generic = NULL;
+        complete(&call->object->pub, *error, call->user_data);
+    }
+    return ok;
 }
 
 static
@@ -498,32 +575,48 @@ nfc_isodep_client_transmit(
     NfcIsoDepClient* isodep,
     const NfcIsoDepApdu* apdu,
     GCancellable* cancel,
-    NfcIsoDepTransmitFunc callback,
+    NfcIsoDepTransmitFunc complete,
     void* user_data,
     GDestroyNotify destroy)
 {
     NfcIsoDepClientObject* self = nfc_isodep_client_object_cast(isodep);
 
     if (self && apdu && isodep->valid && isodep->present &&
-        (callback || destroy) &&
+        (complete || destroy) &&
         (!cancel || !g_cancellable_is_cancelled(cancel))) {
-        NfcIsoDepTransmitData* data = g_slice_new0(NfcIsoDepTransmitData);
-        const void* bytes = apdu->data.bytes;
-
-        if (!bytes) bytes = &data;
-        g_object_ref(data->object = self);
-        data->callback = callback;
-        data->destroy = destroy;
-        data->user_data = user_data;
-        if (cancel) {
-            g_object_ref(data->cancel = cancel);
-            data->cancel_id = g_cancellable_connect(cancel,
-                G_CALLBACK(nfc_isodep_client_transmit_cancelled), data, NULL);
-        }
         org_sailfishos_nfc_iso_dep_call_transmit(self->proxy, apdu->cla,
             apdu->ins, apdu->p1, apdu->p2, g_variant_new_from_data
-            (G_VARIANT_TYPE("ay"), bytes, apdu->data.size, TRUE, NULL, NULL),
-            apdu->le, cancel, nfc_isodep_client_transmit_done, data);
+            (G_VARIANT_TYPE("ay"), apdu->data.bytes, apdu->data.size,
+            TRUE, NULL, NULL), apdu->le, cancel, nfc_isodep_client_call_done,
+            nfc_isodep_client_call_new(self, nfc_isodep_client_transmit_finish,
+                cancel, G_CALLBACK(complete), user_data, destroy));
+        return TRUE;
+    } else {
+        /* Destroy callback is always invoked even if we return FALSE */
+        if (destroy) {
+            destroy(user_data);
+        }
+        return FALSE;
+    }
+}
+
+gboolean
+nfc_isodep_reset(
+    NfcIsoDepClient* isodep,
+    GCancellable* cancel,
+    NfcIsoDepCompleteFunc complete,
+    void* user_data,
+    GDestroyNotify destroy) /* Since 1.2.0 */
+{
+    NfcIsoDepClientObject* self = nfc_isodep_client_object_cast(isodep);
+
+    /* Reset call requires org.sailfishos.nfc.IsoDep interface version 3 */
+    if (G_LIKELY(self) && self->version >= 3 &&
+        (!cancel || !g_cancellable_is_cancelled(cancel))) {
+        org_sailfishos_nfc_iso_dep_call_reset(self->proxy, cancel,
+            nfc_isodep_client_call_done, nfc_isodep_client_call_new(self,
+                nfc_isodep_client_reset_finish, cancel,
+                G_CALLBACK(complete), user_data, destroy));
         return TRUE;
     } else {
         /* Destroy callback is always invoked even if we return FALSE */
