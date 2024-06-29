@@ -362,21 +362,15 @@ NfcPeerService*
 nfc_peer_service_ref(
     NfcPeerService* service)
 {
-    if (G_LIKELY(service)) {
-        g_object_ref(nfc_peer_service_object_cast(service));
-        return service;
-    } else {
-        return NULL;
-    }
+    gutil_object_ref(nfc_peer_service_object_cast(service));
+    return service;
 }
 
 void
 nfc_peer_service_unref(
     NfcPeerService* service)
 {
-    if (G_LIKELY(service)) {
-        g_object_unref(nfc_peer_service_object_cast(service));
-    }
+    gutil_object_unref(nfc_peer_service_object_cast(service));
 }
 
 gulong

@@ -81,9 +81,12 @@ struct nfc_daemon_client {
      (((v2) & 0xfff) << 12) | \
       ((v3) & 0xfff))
 
-#define NFC_DAEMON_VERSION_MAJOR(v) (((v) >> 24) & 0x7f)
-#define NFC_DAEMON_VERSION_MINOR(v) (((v) >> 12) & 0xfff)
-#define NFC_DAEMON_VERSION_NANO(v)  ((v) & 0xfff)
+#define NFC_DAEMON_VERSION_MAJOR(v)  (((v) >> 24) & 0x7f)
+#define NFC_DAEMON_VERSION_MINOR(v)  (((v) >> 12) & 0xfff)
+#define NFC_DAEMON_VERSION_RELEASE(v) ((v) & 0xfff)
+
+/* RELEASE used to be called NANO before 1.2.0 */
+#define NFC_DAEMON_VERSION_NANO(v)  NFC_DAEMON_VERSION_RELEASE(v)
 
 typedef
 void

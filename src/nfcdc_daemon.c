@@ -1109,21 +1109,15 @@ NfcDaemonClient*
 nfc_daemon_client_ref(
     NfcDaemonClient* daemon)
 {
-    if (G_LIKELY(daemon)) {
-        g_object_ref(nfc_daemon_client_object_cast(daemon));
-        return daemon;
-    } else {
-        return NULL;
-    }
+    gutil_object_ref(nfc_daemon_client_object_cast(daemon));
+    return daemon;
 }
 
 void
 nfc_daemon_client_unref(
     NfcDaemonClient* daemon)
 {
-    if (G_LIKELY(daemon)) {
-        g_object_unref(nfc_daemon_client_object_cast(daemon));
-    }
+    gutil_object_unref(nfc_daemon_client_object_cast(daemon));
 }
 
 gboolean
@@ -1337,9 +1331,7 @@ nfc_daemon_client_object_finalize(
     nfc_daemon_client_set_settings_error(self, NULL);
     nfc_daemon_client_drop_daemon_proxy(self);
     nfc_daemon_client_drop_settings_proxy(self);
-    if (self->connection) {
-        g_object_unref(self->connection);
-    }
+    gutil_object_unref(self->connection);
     g_strfreev(self->adapters);
     G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }

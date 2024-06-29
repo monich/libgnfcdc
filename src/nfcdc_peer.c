@@ -378,21 +378,15 @@ NfcPeerClient*
 nfc_peer_client_ref(
     NfcPeerClient* peer)
 {
-    if (G_LIKELY(peer)) {
-        g_object_ref(nfc_peer_client_object_cast(peer));
-        return peer;
-    } else {
-        return NULL;
-    }
+    gutil_object_ref(nfc_peer_client_object_cast(peer));
+    return peer;
 }
 
 void
 nfc_peer_client_unref(
     NfcPeerClient* peer)
 {
-    if (G_LIKELY(peer)) {
-        g_object_unref(nfc_peer_client_object_cast(peer));
-    }
+    gutil_object_unref(nfc_peer_client_object_cast(peer));
 }
 
 gboolean
@@ -534,9 +528,7 @@ nfc_peer_client_object_finalize(
     nfc_adapter_client_remove_all_handlers(self->adapter,
         self->adapter_event_id);
     nfc_adapter_client_unref(self->adapter);
-    if (self->connection) {
-        g_object_unref(self->connection);
-    }
+    gutil_object_unref(self->connection);
     g_hash_table_remove(nfc_peer_client_table, peer->path);
     if (g_hash_table_size(nfc_peer_client_table) == 0) {
         g_hash_table_unref(nfc_peer_client_table);

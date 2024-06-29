@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
- * Copyright (C) 2019-2022 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer
- *      in the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -627,21 +629,15 @@ NfcAdapterClient*
 nfc_adapter_client_ref(
     NfcAdapterClient* adapter)
 {
-    if (G_LIKELY(adapter)) {
-        g_object_ref(nfc_adapter_client_object_cast(adapter));
-        return adapter;
-    } else {
-        return NULL;
-    }
+    gutil_object_ref(nfc_adapter_client_object_cast(adapter));
+    return adapter;
 }
 
 void
 nfc_adapter_client_unref(
     NfcAdapterClient* adapter)
 {
-    if (G_LIKELY(adapter)) {
-        g_object_unref(nfc_adapter_client_object_cast(adapter));
-    }
+    gutil_object_unref(nfc_adapter_client_object_cast(adapter));
 }
 
 gulong
@@ -721,9 +717,7 @@ nfc_adapter_client_object_finalize(
     nfc_adapter_client_drop_proxy(self);
     nfc_daemon_client_remove_all_handlers(self->daemon, self->daemon_event_id);
     nfc_daemon_client_unref(self->daemon);
-    if (self->connection) {
-        g_object_unref(self->connection);
-    }
+    gutil_object_unref(self->connection);
     g_strfreev(self->tags);
     g_strfreev(self->peers);
     if (adapter->path) {

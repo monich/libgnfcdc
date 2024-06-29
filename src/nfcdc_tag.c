@@ -753,21 +753,15 @@ NfcTagClient*
 nfc_tag_client_ref(
     NfcTagClient* tag)
 {
-    if (G_LIKELY(tag)) {
-        g_object_ref(nfc_tag_client_object_cast(tag));
-        return tag;
-    } else {
-        return NULL;
-    }
+    gutil_object_ref(nfc_tag_client_object_cast(tag));
+    return tag;
 }
 
 void
 nfc_tag_client_unref(
     NfcTagClient* tag)
 {
-    if (G_LIKELY(tag)) {
-        g_object_unref(nfc_tag_client_object_cast(tag));
-    }
+    gutil_object_unref(nfc_tag_client_object_cast(tag));
 }
 
 NfcTagClientLock*
@@ -945,9 +939,7 @@ nfc_tag_client_object_finalize(
     nfc_adapter_client_remove_all_handlers(self->adapter,
         self->adapter_event_id);
     nfc_adapter_client_unref(self->adapter);
-    if (self->connection) {
-        g_object_unref(self->connection);
-    }
+    gutil_object_unref(self->connection);
     if (self->poll_params) {
         g_hash_table_destroy(self->poll_params);
     }
