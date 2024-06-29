@@ -261,19 +261,19 @@ nfc_tag_client_lock_acquire_done(
 
     if (data->callback) {
         NfcTagClientLockFunc callback = data->callback;
+        NfcTagClientLock* lock = tag->lock;
 
         data->callback = NULL;
-        if (tag->lock) {
+        if (lock) {
             /* No need to allocate a new lock */
-            callback(&tag->pub, tag->lock, NULL, data->user_data);
+            nfc_tag_client_lock_ref(lock);
+            callback(&tag->pub, lock, NULL, data->user_data);
             if (!error) {
                 /* Release the extra lock */
                 org_sailfishos_nfc_tag_call_release(tag->proxy, NULL,
                     nfc_tag_client_lock_done, g_object_ref(tag));
             }
         } else {
-            NfcTagClientLock* lock;
-
             if (error) {
                 lock = NULL;
             } else {
@@ -284,8 +284,8 @@ nfc_tag_client_lock_acquire_done(
                 tag->lock = lock;
             }
             callback(&tag->pub, lock, error, data->user_data);
-            nfc_tag_client_lock_unref(lock);
         }
+        nfc_tag_client_lock_unref(lock);
     } else if (!error) {
         org_sailfishos_nfc_tag_call_release(tag->proxy, NULL,
             nfc_tag_client_lock_done, g_object_ref(tag));
