@@ -58,7 +58,7 @@ typedef struct nfc_service_connection NfcServiceConnection;  /* Since 1.0.6 */
 typedef struct nfc_peer_client NfcPeerClient; /* Since 1.0.6 */
 typedef struct nfc_peer_service NfcPeerService; /* Since 1.0.6 */
 typedef struct nfc_tag_client NfcTagClient;
-typedef struct nfc_tech_request NfcTechRequest; /* Since 1.2.0 */
+typedef struct nfc_tech_request NfcTechRequest; /* Since 1.1.0 */
 
 typedef enum nfc_daemon_mode {
     NFC_MODE_NONE           = 0x00,
@@ -75,7 +75,7 @@ typedef enum nfc_tech {
     NFC_TECH_A = 0x01,
     NFC_TECH_B = 0x02,
     NFC_TECH_F = 0x04
-} NFC_TECH; /* Since 1.2.0 */
+} NFC_TECH; /* Since 1.1.0 */
 
 extern GLogModule NFCDC_LOG_MODULE;
 

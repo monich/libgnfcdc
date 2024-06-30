@@ -55,7 +55,7 @@ typedef enum nfc_tag_property {
     NFC_TAG_PROPERTY_PRESENT,
     NFC_TAG_PROPERTY_INTERFACES,
     NFC_TAG_PROPERTY_NDEF_RECORDS,
-    /* Since 1.2.0 */
+    /* Since 1.1.0 */
     NFC_TAG_PROPERTY_TECHNOLOGY,
     /* Moving target: */
     NFC_TAG_PROPERTY_COUNT
@@ -78,7 +78,7 @@ struct nfc_tag_client {
     gboolean present;
     const GStrV* interfaces;
     const GStrV* ndef_records;
-    /* Since 1.2.0 */
+    /* Since 1.1.0 */
     NFC_TECH technology;
 };
 

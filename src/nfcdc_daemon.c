@@ -1128,7 +1128,7 @@ nfc_daemon_client_register_local_host_service(
     GCancellable* cancel,
     NfcDaemonClientCallFunc callback,
     void* user_data,
-    GDestroyNotify destroy) /* Since 1.2.0 */
+    GDestroyNotify destroy) /* Since 1.1.0 */
 {
     NfcDaemonClientObject* self = nfc_daemon_client_object_cast(daemon);
 
@@ -1159,7 +1159,7 @@ nfc_daemon_client_unregister_local_host_service(
     GCancellable* cancel,
     NfcDaemonClientCallFunc callback,
     void* user_data,
-    GDestroyNotify destroy) /* Since 1.2.0 */
+    GDestroyNotify destroy) /* Since 1.1.0 */
 {
     NfcDaemonClientObject* self = nfc_daemon_client_object_cast(daemon);
 
@@ -1264,7 +1264,7 @@ NfcTechRequest*
 nfc_tech_request_new(
     NfcDaemonClient* daemon,
     NFC_TECH allow,
-    NFC_TECH disallow)  /* Since 1.2.0 */
+    NFC_TECH disallow)  /* Since 1.1.0 */
 {
     NfcDaemonClientObject* self = nfc_daemon_client_object_cast(daemon);
 
@@ -1292,7 +1292,7 @@ nfc_tech_request_new(
 
 void
 nfc_tech_request_free(
-    NfcTechRequest* req)  /* Since 1.2.0 */
+    NfcTechRequest* req)  /* Since 1.1.0 */
 {
     if (req) {
         NfcTechRequestPriv* priv = G_CAST(req, NfcTechRequestPriv, pub);

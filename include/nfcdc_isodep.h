@@ -108,7 +108,7 @@ void
 (*NfcIsoDepCompleteFunc)(
     NfcIsoDepClient* isodep,
     const GError* error,
-    void* user_data); /* Since 1.2.0 */
+    void* user_data); /* Since 1.1.0 */
 
 NfcIsoDepClient*
 nfc_isodep_client_new(
@@ -146,7 +146,7 @@ nfc_isodep_reset(
     GCancellable* cancel,
     NfcIsoDepCompleteFunc complete,
     void* user_data,
-    GDestroyNotify destroy); /* Since 1.2.0 */
+    GDestroyNotify destroy); /* Since 1.1.0 */
 
 gulong
 nfc_isodep_client_add_property_handler(

@@ -57,7 +57,7 @@ typedef enum nfc_daemon_property {
     NFC_DAEMON_PROPERTY_VERSION,
     /* Since 1.0.6 */
     NFC_DAEMON_PROPERTY_MODE,
-    /* Since 1.2.0 */
+    /* Since 1.1.0 */
     NFC_DAEMON_PROPERTY_TECHS,
     NFC_DAEMON_PROPERTY_COUNT /* Moving target */
 } NFC_DAEMON_PROPERTY;
@@ -72,8 +72,8 @@ struct nfc_daemon_client {
     int version; /* Zero for nfcd versions < 1.0.26 */
     /* Since 1.0.6 */
     NFC_MODE mode; /* Zero for nfcd versions < 1.1.0 */
-    /* Since 1.2.0 */
-    NFC_TECH techs; /* Zero for nfcd versions < 1.2.0 */
+    /* Since 1.1.0 */
+    NFC_TECH techs; /* Zero for nfcd versions < 1.1.0 */
 };
 
 #define NFC_DAEMON_VERSION(v1,v2,v3) \
@@ -85,7 +85,7 @@ struct nfc_daemon_client {
 #define NFC_DAEMON_VERSION_MINOR(v)  (((v) >> 12) & 0xfff)
 #define NFC_DAEMON_VERSION_RELEASE(v) ((v) & 0xfff)
 
-/* RELEASE used to be called NANO before 1.2.0 */
+/* RELEASE used to be called NANO before 1.1.0 */
 #define NFC_DAEMON_VERSION_NANO(v)  NFC_DAEMON_VERSION_RELEASE(v)
 
 typedef
@@ -93,7 +93,7 @@ void
 (*NfcDaemonClientCallFunc)(
     NfcDaemonClient* daemon,
     const GError* error,
-    void* user_data); /* Since 1.2.0 */
+    void* user_data); /* Since 1.1.0 */
 
 typedef
 void
@@ -122,7 +122,7 @@ nfc_daemon_client_register_local_host_service(
     GCancellable* cancel,
     NfcDaemonClientCallFunc callback,
     void* user_data,
-    GDestroyNotify destroy); /* Since 1.2.0 */
+    GDestroyNotify destroy); /* Since 1.1.0 */
 
 gboolean
 nfc_daemon_client_unregister_local_host_service(
@@ -131,7 +131,7 @@ nfc_daemon_client_unregister_local_host_service(
     GCancellable* cancel,
     NfcDaemonClientCallFunc callback,
     void* user_data,
-    GDestroyNotify destroy); /* Since 1.2.0 */
+    GDestroyNotify destroy); /* Since 1.1.0 */
 
 gulong
 nfc_daemon_client_add_property_handler(
@@ -176,17 +176,17 @@ nfc_mode_request_free(
 struct nfc_tech_request {
     NFC_TECH allow;
     NFC_TECH disallow;
-};  /* Since 1.2.0 */
+};  /* Since 1.1.0 */
 
 NfcTechRequest*
 nfc_tech_request_new(
     NfcDaemonClient* daemon,
     NFC_TECH allow,
-    NFC_TECH disallow);  /* Since 1.2.0 */
+    NFC_TECH disallow);  /* Since 1.1.0 */
 
 void
 nfc_tech_request_free(
-    NfcTechRequest* request);  /* Since 1.2.0 */
+    NfcTechRequest* request);  /* Since 1.1.0 */
 
 G_END_DECLS
 
