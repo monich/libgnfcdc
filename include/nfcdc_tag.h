@@ -173,6 +173,10 @@ void
 nfc_tag_client_lock_unref(
     NfcTagClientLock* lock);
 
+const char*
+nfc_tag_client_lock_path(
+    NfcTagClientLock* lock); /* Since 1.1.0 */
+
 G_END_DECLS
 
 #endif /* NFCDC_TAG_H */

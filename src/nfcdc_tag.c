@@ -327,6 +327,13 @@ nfc_tag_client_lock_unref(
     }
 }
 
+const char*
+nfc_tag_client_lock_path(
+    NfcTagClientLock* lock) /* Since 1.1.0 */
+{
+    return lock ? lock->tag->pub.path : NULL;
+}
+
 /*==========================================================================*
  * Implementation
  *==========================================================================*/
