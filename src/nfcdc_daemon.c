@@ -58,6 +58,13 @@
 # define NFCDC_NEED_PEER_SERVICE 1
 #endif /* NFCDC_NEED_PEER_SERVICE */
 
+enum nfc_daemon_client_proxy_signals {
+    CHANGE_ADAPTERS_CHANGED,
+    CHANGE_MODE_CHANGED,
+    CHANGE_TECHS_CHANGED,
+    CHANGE_SIGNAL_COUNT
+};
+
 typedef NfcClientBaseClass NfcDaemonClientObjectClass;
 typedef struct nfc_daemon_client_object {
     NfcClientBase base;
@@ -68,7 +75,7 @@ typedef struct nfc_daemon_client_object {
 
     /* Daemon interface */
     OrgSailfishosNfcDaemon* proxy;
-    gulong adapters_changed_id;
+    gulong change_signal_id[CHANGE_SIGNAL_COUNT];
     gboolean daemon_watch_initializing;
     gboolean daemon_present;
     guint daemon_watch_id;
@@ -338,27 +345,6 @@ nfc_daemon_client_set_settings_error(
 
 static
 void
-nfc_daemon_client_daemon_adapters_changed(
-    OrgSailfishosNfcDaemon* proxy,
-    GStrV* adapters,
-    NfcDaemonClientObject* self)
-{
-    /* We may receive a signal before the initial query has completed */
-    GASSERT(!self->proxy || self->proxy == proxy);
-    if (!gutil_strv_equal(self->adapters, adapters)) {
-        NfcDaemonClient* pub = &self->pub;
-
-        DUMP_STRV(NULL, "Adapters", "=", adapters);
-        g_strfreev(self->adapters);
-        pub->adapters = (self->adapters = g_strdupv(adapters)) ?
-            self->adapters : &nfc_daemon_client_empty_strv;
-        nfc_daemon_client_queue_signal_(self, ADAPTERS);
-        nfc_daemon_client_emit_queued_signals(self);
-    }
-}
-
-static
-void
 nfc_daemon_client_daemon_set_version(
     NfcDaemonClientObject* self,
     int version)
@@ -379,29 +365,29 @@ static
 void
 nfc_daemon_client_daemon_set_adapters(
     NfcDaemonClientObject* self,
-    char** adapters)
+    char** take_adapters)
 {
     NfcDaemonClient* pub = &self->pub;
 
-    if (!gutil_strv_equal(self->adapters, adapters)) {
+    if (!gutil_strv_equal(self->adapters, take_adapters)) {
         g_strfreev(self->adapters);
-        pub->adapters = (self->adapters = adapters) ?
+        pub->adapters = (self->adapters = take_adapters) ?
             self->adapters : &nfc_daemon_client_empty_strv;
         nfc_daemon_client_queue_signal_(self, ADAPTERS);
     } else {
-        g_strfreev(adapters);
+        g_strfreev(take_adapters);
     }
 }
 
 static
 void
-nfc_daemon_client_daemon_set_mode(
+nfc_daemon_client_daemon_update_mode(
     NfcDaemonClientObject* self,
     NFC_MODE mode)
 {
     NfcDaemonClient* pub = &self->pub;
 
-    GDEBUG("NFC mode %02x", mode);
+    GDEBUG("NFC mode 0x%02x", mode);
     if (pub->mode != mode) {
         pub->mode = mode;
         nfc_daemon_client_queue_signal_(self, MODE);
@@ -410,17 +396,58 @@ nfc_daemon_client_daemon_set_mode(
 
 static
 void
-nfc_daemon_client_daemon_set_techs(
+nfc_daemon_client_daemon_update_techs(
     NfcDaemonClientObject* self,
     NFC_TECH techs)
 {
     NfcDaemonClient* pub = &self->pub;
 
-    GDEBUG("NFC techs %02x", techs);
+    GDEBUG("NFC techs 0x%02x", techs);
     if (pub->techs != techs) {
         pub->techs = techs;
         nfc_daemon_client_queue_signal_(self, TECHS);
     }
+}
+
+static
+void
+nfc_daemon_client_daemon_adapters_changed(
+    OrgSailfishosNfcDaemon* proxy,
+    GStrV* adapters,
+    NfcDaemonClientObject* self)
+{
+    if (!gutil_strv_equal(self->adapters, adapters)) {
+        NfcDaemonClient* pub = &self->pub;
+
+        DUMP_STRV(NULL, "Adapters", "=", adapters);
+        g_strfreev(self->adapters);
+        pub->adapters = (self->adapters = g_strdupv(adapters)) ?
+            self->adapters : &nfc_daemon_client_empty_strv;
+        nfc_daemon_client_queue_signal_(self, ADAPTERS);
+        nfc_daemon_client_emit_queued_signals(self);
+    }
+}
+
+static
+void
+nfc_daemon_client_daemon_mode_changed(
+    OrgSailfishosNfcDaemon* proxy,
+    NFC_MODE mode,
+    NfcDaemonClientObject* self)
+{
+    nfc_daemon_client_daemon_update_mode(self, mode);
+    nfc_daemon_client_emit_queued_signals(self);
+}
+
+static
+void
+nfc_daemon_client_daemon_techs_changed(
+    OrgSailfishosNfcDaemon* proxy,
+    NFC_TECH techs,
+    NfcDaemonClientObject* self)
+{
+    nfc_daemon_client_daemon_update_techs(self, techs);
+    nfc_daemon_client_emit_queued_signals(self);
 }
 
 #if NFCDC_NEED_PEER_SERVICE
@@ -465,19 +492,19 @@ nfc_daemon_client_daemon_get_all4_done(
     guint mode = 0, techs = 0;
 
     GASSERT(!self->proxy);
-    GASSERT(self->adapters_changed_id);
     if (org_sailfishos_nfc_daemon_call_get_all4_finish(daemon,
         &iface_version, &adapters, &version, &mode, &techs, result, &error)) {
         GASSERT(iface_version >= 3);
         nfc_daemon_client_daemon_set_version(self, version);
         nfc_daemon_client_daemon_set_adapters(self, adapters);
-        nfc_daemon_client_daemon_set_mode(self, mode);
-        nfc_daemon_client_daemon_set_techs(self, techs);
+        nfc_daemon_client_daemon_update_mode(self, mode);
+        nfc_daemon_client_daemon_update_techs(self, techs);
         self->proxy = daemon;
     } else {
         GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
         nfc_daemon_client_set_daemon_error(self, error);
-        gutil_disconnect_handlers(daemon, &self->adapters_changed_id, 1);
+        gutil_disconnect_handlers(daemon, self->change_signal_id,
+            G_N_ELEMENTS(self->change_signal_id));
         g_object_unref(daemon);
     }
     nfc_daemon_client_update_valid_and_present(self);
@@ -501,18 +528,18 @@ nfc_daemon_client_daemon_get_all3_done(
     guint mode = 0;
 
     GASSERT(!self->proxy);
-    GASSERT(self->adapters_changed_id);
     if (org_sailfishos_nfc_daemon_call_get_all3_finish(daemon,
         &iface_version, &adapters, &version, &mode, result, &error)) {
         GASSERT(iface_version >= 3);
         nfc_daemon_client_daemon_set_version(self, version);
         nfc_daemon_client_daemon_set_adapters(self, adapters);
-        nfc_daemon_client_daemon_set_mode(self, mode);
+        nfc_daemon_client_daemon_update_mode(self, mode);
         self->proxy = daemon;
     } else {
         GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
         nfc_daemon_client_set_daemon_error(self, error);
-        gutil_disconnect_handlers(daemon, &self->adapters_changed_id, 1);
+        gutil_disconnect_handlers(daemon, self->change_signal_id,
+            G_N_ELEMENTS(self->change_signal_id));
         g_object_unref(daemon);
     }
     nfc_daemon_client_update_valid_and_present(self);
@@ -535,7 +562,6 @@ nfc_daemon_client_daemon_get_all2_done(
     gint version = 0;
 
     GASSERT(!self->proxy);
-    GASSERT(self->adapters_changed_id);
     if (org_sailfishos_nfc_daemon_call_get_all2_finish(daemon,
         &iface_version, &adapters, &version, result, &error)) {
         GASSERT(iface_version == 2);
@@ -545,7 +571,8 @@ nfc_daemon_client_daemon_get_all2_done(
     } else {
         GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
         nfc_daemon_client_set_daemon_error(self, error);
-        gutil_disconnect_handlers(daemon, &self->adapters_changed_id, 1);
+        gutil_disconnect_handlers(daemon, self->change_signal_id,
+            G_N_ELEMENTS(self->change_signal_id));
         g_object_unref(daemon);
     }
     nfc_daemon_client_update_valid_and_present(self);
@@ -567,7 +594,6 @@ nfc_daemon_client_daemon_get_all_done(
     char** adapters = NULL;
 
     GASSERT(!self->proxy);
-    GASSERT(self->adapters_changed_id);
     if (org_sailfishos_nfc_daemon_call_get_all_finish(daemon,
         &iface_version, &adapters, result, &error)) {
         NfcDaemonClient* pub = &self->pub;
@@ -593,7 +619,8 @@ nfc_daemon_client_daemon_get_all_done(
     } else {
         GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
         nfc_daemon_client_set_daemon_error(self, error);
-        gutil_disconnect_handlers(daemon, &self->adapters_changed_id, 1);
+        gutil_disconnect_handlers(daemon, self->change_signal_id,
+            G_N_ELEMENTS(self->change_signal_id));
         g_object_unref(daemon);
     }
     nfc_daemon_client_update_valid_and_present(self);
@@ -615,9 +642,15 @@ nfc_daemon_client_new_daemon(
 
     if (daemon) {
         GDEBUG("Connected to NFC daemon");
-        self->adapters_changed_id =
+        self->change_signal_id[CHANGE_ADAPTERS_CHANGED] =
             g_signal_connect(daemon, "adapters-changed",
                 G_CALLBACK(nfc_daemon_client_daemon_adapters_changed), self);
+        self->change_signal_id[CHANGE_MODE_CHANGED] =
+            g_signal_connect(daemon, "mode-changed",
+                G_CALLBACK(nfc_daemon_client_daemon_mode_changed), self);
+        self->change_signal_id[CHANGE_TECHS_CHANGED] =
+            g_signal_connect(daemon, "techs-changed",
+                G_CALLBACK(nfc_daemon_client_daemon_techs_changed), self);
         org_sailfishos_nfc_daemon_call_get_all(daemon, NULL,
             nfc_daemon_client_daemon_get_all_done, g_object_ref(self));
     } else {
@@ -719,7 +752,8 @@ nfc_daemon_client_drop_daemon_proxy(
     NfcDaemonClient* pub = &self->pub;
 
     if (self->proxy) {
-        gutil_disconnect_handlers(self->proxy, &self->adapters_changed_id, 1);
+        gutil_disconnect_handlers(self->proxy, self->change_signal_id,
+            G_N_ELEMENTS(self->change_signal_id));
         g_object_unref(self->proxy);
         self->proxy = NULL;
     }
@@ -744,6 +778,10 @@ nfc_daemon_client_drop_daemon_proxy(
     if (pub->mode != NFC_MODE_NONE) {
         pub->mode = NFC_MODE_NONE;
         nfc_daemon_client_queue_signal_(self, MODE);
+    }
+    if (pub->techs != NFC_TECH_NONE) {
+        pub->techs = NFC_TECH_NONE;
+        nfc_daemon_client_queue_signal_(self, TECHS);
     }
 }
 

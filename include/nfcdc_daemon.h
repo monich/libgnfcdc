@@ -71,9 +71,9 @@ struct nfc_daemon_client {
     /* Since 1.0.3 */
     int version; /* Zero for nfcd versions < 1.0.26 */
     /* Since 1.0.6 */
-    NFC_MODE mode; /* Zero for nfcd versions < 1.1.0 */
+    NFC_MODE mode; /* Zero for nfcd versions < 1.2.0 */
     /* Since 1.1.0 */
-    NFC_TECH techs; /* Zero for nfcd versions < 1.1.0 */
+    NFC_TECH techs; /* Zero for nfcd versions < 1.2.0 */
 };
 
 #define NFC_DAEMON_VERSION(v1,v2,v3) \
