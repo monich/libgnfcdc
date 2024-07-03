@@ -37,9 +37,9 @@
  * any official policies, either expressed or implied.
  */
 
-#include "nfcdc_default_adapter.h"
-#include "nfcdc_daemon.h"
 #include "nfcdc_base.h"
+#include "nfcdc_daemon.h"
+#include "nfcdc_default_adapter.h"
 #include "nfcdc_log.h"
 
 #include <gutil_macros.h>
@@ -62,6 +62,7 @@ typedef struct nfc_default_adapter_object {
     gulong adapter_signal_id;
     GStrV* tags;
     GStrV* peers;
+    GStrV* hosts;
 } NfcDefaultAdapterObject;
 
 #define PARENT_CLASS nfc_default_adapter_object_parent_class
@@ -156,6 +157,16 @@ nfc_default_adapter_clear(
         pub->peers = &nfc_default_adapter_empty_strv;
         nfc_default_adapter_queue_signal(self, PEERS);
     }
+    if (pub->hosts[0]) {
+        g_strfreev(self->hosts);
+        self->hosts = NULL;
+        pub->hosts = &nfc_default_adapter_empty_strv;
+        nfc_default_adapter_queue_signal(self, HOSTS);
+    }
+    if (pub->supported_techs) {
+        pub->supported_techs = NFC_TECH_NONE;
+        nfc_default_adapter_queue_signal(self, SUPPORTED_TECHS);
+    }
 }
 
 static
@@ -169,9 +180,11 @@ nfc_default_adapter_sync(
     if (adapter->valid && adapter->present) {
         if (pub->adapter != adapter) {
             pub->adapter = adapter;
+            GDEBUG("Default adapter %s", adapter->path + 1);
             nfc_default_adapter_queue_signal(self, ADAPTER);
         }
     } else if (pub->adapter) {
+        GDEBUG("No default adapter");
         pub->adapter = NULL;
         nfc_default_adapter_queue_signal(self, ADAPTER);
     }
@@ -214,6 +227,20 @@ nfc_default_adapter_sync(
             pub->peers = &nfc_default_adapter_empty_strv;
         }
         nfc_default_adapter_queue_signal(self, PEERS);
+    }
+    if (!gutil_strv_equal(pub->hosts, adapter->hosts)) {
+        g_strfreev(self->hosts);
+        if (adapter->hosts[0]) {
+            pub->hosts = self->hosts = g_strdupv((char**)adapter->hosts);
+        } else {
+            self->hosts = NULL;
+            pub->hosts = &nfc_default_adapter_empty_strv;
+        }
+        nfc_default_adapter_queue_signal(self, HOSTS);
+    }
+    if (pub->supported_techs != adapter->supported_techs) {
+        pub->supported_techs = adapter->supported_techs;
+        nfc_default_adapter_queue_signal(self, SUPPORTED_TECHS);
     }
 }
 
@@ -361,6 +388,7 @@ nfc_default_adapter_object_init(
     GVERBOSE_("");
     pub->tags = &nfc_default_adapter_empty_strv;
     pub->peers = &nfc_default_adapter_empty_strv;
+    pub->hosts = &nfc_default_adapter_empty_strv;
     self->daemon = nfc_daemon_client_new();
     self->daemon_event_id[DAEMON_VALID_CHANGED] =
         nfc_daemon_client_add_property_handler(self->daemon,
@@ -389,6 +417,7 @@ nfc_default_adapter_object_finalize(
     nfc_daemon_client_unref(self->daemon);
     g_strfreev(self->tags);
     g_strfreev(self->peers);
+    g_strfreev(self->hosts);
     G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }
 
