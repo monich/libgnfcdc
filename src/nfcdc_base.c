@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2021 Jolla Ltd.
- * Copyright (C) 2019-2021 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -130,25 +130,28 @@ nfc_client_base_emit_queued_signals(
     const guint8* base = (guint8*)self;
     const gboolean* valid = (gboolean*)(klass->valid_offset ?
         (base + klass->valid_offset) : NULL);
-    gboolean valid_changed;
-    guint p;
+    guint p = NFC_CLIENT_BASE_PROPERTY_ANY;
+    gboolean became_valid = FALSE;
 
     /* Handlers could drop their references to us */
     g_object_ref(self);
 
-    /* VALID is the last signals to be emitted if the object BECOMES valid */
-    if (valid && (*valid) && (self->queued_signals & SIGNAL_BIT_(VALID))) {
-        self->queued_signals &= ~SIGNAL_BIT_(VALID);
-        valid_changed = TRUE;
+    /* VALID is the last signal to be emitted if the object BECOMES valid */
+    if (self->queued_signals & SIGNAL_BIT_(VALID)) {
+        if (valid && *valid) {
+            self->queued_signals &= ~SIGNAL_BIT_(VALID);
+            became_valid = TRUE;
+            p++; /* Exclude VALID from the loop and emit it later */
+        }
     } else {
-        valid_changed = FALSE;
+        p++; /* Skip VALID */
     }
 
     /*
-     * Emit the signals. Not that in case if valid has become FALSE,
+     * Emit the signals. Note that in case if valid has become FALSE,
      * then VALID is emitted first, otherwise it's emitted last.
      */
-    for (p = valid ? 1 : 0; /* Skip VALID if we have it */
+    for (p++; /* Skip ANY or VALID */
          self->queued_signals && p < NFC_CLIENT_BASE_MAX_PROPERTIES;
          p++) {
         if (self->queued_signals & NFC_CLIENT_BASE_SIGNAL_BIT(p)) {
@@ -157,7 +160,7 @@ nfc_client_base_emit_queued_signals(
     }
 
     /* Then emit VALID if necessary */
-    if (valid_changed) {
+    if (became_valid) {
         nfc_client_base_emit_property_changed_signal(self,
             NFC_CLIENT_BASE_PROPERTY_VALID);
     }
