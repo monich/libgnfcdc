@@ -43,8 +43,8 @@
 
 #define NFCDC_VERSION_MAJOR   1
 #define NFCDC_VERSION_MINOR   1
-#define NFCDC_VERSION_RELEASE 0
-#define NFCDC_VERSION_STRING  "1.1.0"
+#define NFCDC_VERSION_RELEASE 1
+#define NFCDC_VERSION_STRING  "1.1.1"
 
 #define NFCDC_VERSION_WORD(v1,v2,v3) \
     ((((v1) & 0x7f) << 24) | \
@@ -61,6 +61,7 @@
 
 /* Specific versions */
 #define NFCDC_VERSION_1_1_0 NFCDC_VERSION_WORD(1,1,0)
+#define NFCDC_VERSION_1_1_1 NFCDC_VERSION_WORD(1,1,1)
 
 #endif /* NFCDC_VERSION_H */
 

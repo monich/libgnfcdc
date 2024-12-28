@@ -1,3 +1,10 @@
+libgnfcdc (1.1.1) unstable; urgency=low
+
+  * Fixed corner case in the signal emission
+  * Added debian packaging
+
+ -- Slava Monich <slava@monich.com>  Sat, 28 Dec 2024 21:49:20 +0200
+
 libgnfcdc (1.1.0) unstable; urgency=low
 
   * Track daemon mode and techs
