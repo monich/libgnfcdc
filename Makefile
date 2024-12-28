@@ -185,7 +185,9 @@ print_release_path:
 clean:
 	rm -f *~ $(SRC_DIR)/*~ $(INCLUDE_DIR)/*~ rpm/*~
 	rm -fr $(BUILD_DIR) RPMS installroot
-	rm -fr debian/tmp debian/lib$(NAME) debian/lib$(NAME)-dev
+	rm -fr debian/tmp debian/.debhelper
+	rm -fr debian/lib$(NAME) debian/lib$(NAME)-dev
+	rm -f debian/lib$(NAME).install debian/lib$(NAME)-dev.install
 	rm -f documentation.list debian/files debian/*.substvars
 	rm -f debian/*.debhelper.log debian/*.debhelper debian/*~
 
@@ -250,6 +252,9 @@ ABS_LIBDIR := $(shell echo /$(LIBDIR) | sed -r 's|/+|/|g')
 
 $(PKGCONFIG): $(LIB_NAME).pc.in Makefile
 	sed -e 's|@version@|$(PCVERSION)|g' -e 's|@libdir@|$(ABS_LIBDIR)|g' $< > $@
+
+debian/%.install: debian/%.install.in
+	sed 's|@LIBDIR@|$(LIBDIR)|g' $< > $@
 
 #
 # Install

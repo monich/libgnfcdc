@@ -1,0 +1,13 @@
+libgnfcdc (1.1.0) unstable; urgency=low
+
+  * Track daemon mode and techs
+  * Added nfc_tag_client_lock_path()
+  * Added nfc_isodep_reset()
+  * Make sure that NfcTagClientLock passed to callback has extra ref
+  * Made NfcPeerClient async calls behavior consistent
+  * Added support for registering local host services
+  * Added support for tech requests
+  * Added technology to NfcTagClient
+  * Added compile time version detection macros
+
+ -- Slava Monich <slava@monich.com>  Sun, 14 Jul 2024 05:15:33 +0300

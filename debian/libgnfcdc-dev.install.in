@@ -1,0 +1,3 @@
+debian/tmp/@LIBDIR@/libgnfcdc.so @LIBDIR@
+debian/tmp/@LIBDIR@/pkgconfig/libgnfcdc.pc @LIBDIR@/pkgconfig
+debian/tmp/usr/include/* usr/include
