@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -515,6 +515,24 @@ nfc_tag_client_init_finished(
 {
     NfcTagClient* tag = &self->pub;
 
+#if GUTIL_LOG_DEBUG
+    if (GLOG_ENABLED(GLOG_LEVEL_DEBUG)) {
+        const char* s = NULL;
+
+        switch (tech) {
+        case NFC_TECH_NONE: break;
+        case NFC_TECH_A: s = "A"; break;
+        case NFC_TECH_B: s = "B"; break;
+        case NFC_TECH_F: s = "F"; break;
+        }
+        if (s) {
+            GDEBUG("%s: Tech = %s", self->name, s);
+        } else {
+            GDEBUG("%s: Tech = 0x%02x", self->name, (int) tech);
+        }
+    }
+#endif /* GUTIL_LOG_DEBUG */
+
     if (tag->present != present) {
         tag->present = present;
         nfc_tag_client_queue_signal(self, PRESENT);
@@ -674,7 +692,7 @@ nfc_tag_client_init_1(
     }
     g_object_unref(self);
 }
-        
+
 static
 void
 nfc_tag_client_reinit(
@@ -807,7 +825,7 @@ nfc_tag_client_acquire_lock(
 
             nfc_tag_client_lock_data_init(call, self, callback, destroy,
                 user_data, cancel);
-            
+
             /*
              * We still let the call to complete normally even if it gets
              * cancelled (by not passing GCacellable through), to maintain
