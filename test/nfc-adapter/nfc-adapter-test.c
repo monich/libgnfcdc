@@ -1,6 +1,6 @@
 /*
+ * Copyright (C) 2019-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2019 Jolla Ltd.
- * Copyright (C) 2019 Slava Monich <slava@monich.com>
  *
  * You may use this file under the terms of the BSD license as follows:
  *
@@ -8,21 +8,23 @@
  * modification, are permitted provided that the following conditions
  * are met:
  *
- *   1. Redistributions of source code must retain the above copyright
- *      notice, this list of conditions and the following disclaimer.
- *   2. Redistributions in binary form must reproduce the above copyright
- *      notice, this list of conditions and the following disclaimer in
- *      the documentation and/or other materials provided with the
- *      distribution.
- *   3. Neither the names of the copyright holders nor the names of its
- *      contributors may be used to endorse or promote products derived
- *      from this software without specific prior written permission.
+ *  1. Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer
+ *     in the documentation and/or other materials provided with the
+ *     distribution.
+ *
+ *  3. Neither the names of the copyright holders nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
  * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
  * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
  * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
@@ -99,6 +101,12 @@ app_adapter_changed(
     case NFC_ADAPTER_PROPERTY_TAGS:
         GDEBUG("Tags: %s", adapter->tags[0] ? adapter->tags[0] : "");
         break;
+    case NFC_ADAPTER_PROPERTY_PEERS:
+        GDEBUG("Peers: %s", adapter->peers[0] ? adapter->peers[0] : "");
+        break;
+    case NFC_ADAPTER_PROPERTY_HOSTS:
+        GDEBUG("Hosts: %s", adapter->hosts[0] ? adapter->hosts[0] : "");
+        break;
     case NFC_ADAPTER_PROPERTY_ANY:
     case NFC_ADAPTER_PROPERTY_COUNT:
         break;
@@ -113,6 +121,9 @@ app_default_adapter_changed(
     void* user_data)
 {
     switch (property) {
+    case NFC_DEFAULT_ADAPTER_PROPERTY_VALID:
+        GDEBUG("Valid: %s", da->valid ? "true" : "false");
+        break;
     case NFC_DEFAULT_ADAPTER_PROPERTY_ADAPTER:
         GDEBUG("Adapter: %s", da->adapter ? da->adapter->path : "none");
         break;
@@ -133,6 +144,15 @@ app_default_adapter_changed(
         break;
     case NFC_DEFAULT_ADAPTER_PROPERTY_TAGS:
         GDEBUG("Tags: %s", da->tags[0] ? da->tags[0] : "");
+        break;
+    case NFC_DEFAULT_ADAPTER_PROPERTY_PEERS:
+        GDEBUG("Peers: %s", da->peers[0] ? da->peers[0] : "");
+        break;
+    case NFC_DEFAULT_ADAPTER_PROPERTY_HOSTS:
+        GDEBUG("Hosts: %s", da->hosts[0] ? da->hosts[0] : "");
+        break;
+    case NFC_DEFAULT_ADAPTER_PROPERTY_SUPPORTED_TECHS:
+        GDEBUG("Supported techs: 0x%02X", da->supported_techs);
         break;
     case NFC_DEFAULT_ADAPTER_PROPERTY_ANY:
     case NFC_DEFAULT_ADAPTER_PROPERTY_COUNT:
