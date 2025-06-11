@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -63,6 +63,7 @@ typedef struct nfc_default_adapter_object {
     GStrV* tags;
     GStrV* peers;
     GStrV* hosts;
+    GUtilData* la_nfcid1;
 } NfcDefaultAdapterObject;
 
 #define PARENT_CLASS nfc_default_adapter_object_parent_class
@@ -167,6 +168,15 @@ nfc_default_adapter_clear(
         pub->supported_techs = NFC_TECH_NONE;
         nfc_default_adapter_queue_signal(self, SUPPORTED_TECHS);
     }
+    if (pub->t4_ndef) {
+        pub->t4_ndef = FALSE;
+        nfc_default_adapter_queue_signal(self, T4_NDEF);
+    }
+    if (pub->la_nfcid1) {
+        g_free(self->la_nfcid1);
+        pub->la_nfcid1 = self->la_nfcid1 = NULL;
+        nfc_default_adapter_queue_signal(self, LA_NFCID1);
+    }
 }
 
 static
@@ -241,6 +251,15 @@ nfc_default_adapter_sync(
     if (pub->supported_techs != adapter->supported_techs) {
         pub->supported_techs = adapter->supported_techs;
         nfc_default_adapter_queue_signal(self, SUPPORTED_TECHS);
+    }
+    if (pub->t4_ndef != adapter->t4_ndef) {
+        pub->t4_ndef = adapter->t4_ndef;
+        nfc_default_adapter_queue_signal(self, T4_NDEF);
+    }
+    if (!gutil_data_equal(pub->la_nfcid1, adapter->la_nfcid1)) {
+        g_free(self->la_nfcid1);
+        pub->la_nfcid1 = self->la_nfcid1 = gutil_data_copy(adapter->la_nfcid1);
+        nfc_default_adapter_queue_signal(self, LA_NFCID1);
     }
 }
 
@@ -418,6 +437,7 @@ nfc_default_adapter_object_finalize(
     g_strfreev(self->tags);
     g_strfreev(self->peers);
     g_strfreev(self->hosts);
+    g_free(self->la_nfcid1);
     G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }
 

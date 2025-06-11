@@ -72,6 +72,32 @@ app_signal(
     return G_SOURCE_CONTINUE;
 }
 
+void
+app_dump_data(
+    const char* name,
+    const GUtilData* data)
+{
+    if (GLOG_ENABLED(GLOG_LEVEL_DEBUG)) {
+        if (data) {
+            if (data->size) {
+                GString* buf = g_string_new(NULL);
+                gsize i;
+
+                g_string_printf(buf, "%02X", data->bytes[0]);
+                for (i = 1; i < data->size; i++) {
+                    g_string_append_printf(buf, ":%02X", data->bytes[i]);
+                }
+                GDEBUG("%s: %s", name, buf->str);
+                g_string_free(buf, TRUE);
+            } else {
+                GDEBUG("%s:", name);
+            }
+        } else {
+            GDEBUG("%s: (null)", name);
+        }
+    }
+}
+
 static
 void
 app_adapter_changed(
@@ -106,6 +132,12 @@ app_adapter_changed(
         break;
     case NFC_ADAPTER_PROPERTY_HOSTS:
         GDEBUG("Hosts: %s", adapter->hosts[0] ? adapter->hosts[0] : "");
+        break;
+    case NFC_ADAPTER_PROPERTY_T4_NDEF:
+        GDEBUG("T4_NDEF: %s", adapter->t4_ndef ? "on" : "off");
+        break;
+    case NFC_ADAPTER_PROPERTY_LA_NFCID1:
+        app_dump_data("LA_NFCID1", adapter->la_nfcid1);
         break;
     case NFC_ADAPTER_PROPERTY_ANY:
     case NFC_ADAPTER_PROPERTY_COUNT:
@@ -154,6 +186,12 @@ app_default_adapter_changed(
     case NFC_DEFAULT_ADAPTER_PROPERTY_SUPPORTED_TECHS:
         GDEBUG("Supported techs: 0x%02X", da->supported_techs);
         break;
+    case NFC_DEFAULT_ADAPTER_PROPERTY_T4_NDEF:
+        GDEBUG("T4_NDEF: %s", da->t4_ndef ? "on" : "off");
+        break;
+    case NFC_DEFAULT_ADAPTER_PROPERTY_LA_NFCID1:
+        app_dump_data("LA_NFCID1", da->la_nfcid1);
+        break;
     case NFC_DEFAULT_ADAPTER_PROPERTY_ANY:
     case NFC_DEFAULT_ADAPTER_PROPERTY_COUNT:
         break;
@@ -193,7 +231,7 @@ app_run(
     if (adapter) {
         nfc_adapter_client_remove_handler(adapter, id);
         nfc_adapter_client_unref(adapter);
-    } else { 
+    } else {
         nfc_default_adapter_remove_handler(da, id);
         nfc_default_adapter_unref(da);
     }

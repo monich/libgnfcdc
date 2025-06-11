@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -57,6 +57,9 @@ typedef enum nfc_adapter_property {
     NFC_ADAPTER_PROPERTY_PEERS,
     /* Since 1.1.0 */
     NFC_ADAPTER_PROPERTY_HOSTS,
+    /* Since 1.2.0 */
+    NFC_ADAPTER_PROPERTY_T4_NDEF,
+    NFC_ADAPTER_PROPERTY_LA_NFCID1,
     /* Moving target: */
     NFC_ADAPTER_PROPERTY_COUNT
 } NFC_ADAPTER_PROPERTY;
@@ -84,6 +87,10 @@ struct nfc_adapter_client {
     /* Since 1.1.0 */
     const GStrV* hosts;         /* Empty for nfcd versions < 1.2.0 */
     NFC_TECH supported_techs;   /* Zero for nfcd versions < 1.2.0 */
+    /* Since 1.2.0 (interface version 4) */
+    int version;                /* Adapter D-Bus interface version */
+    gboolean t4_ndef;           /* TRUE for nfcd < 1.2.2 */
+    const GUtilData* la_nfcid1; /* NULL for nfcd < 1.2.2 */
 };
 
 typedef

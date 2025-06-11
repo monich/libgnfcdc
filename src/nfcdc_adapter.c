@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -63,6 +63,7 @@ enum nfc_adapter_client_proxy_signals {
     PROXY_TAGS_CHANGED,
     PROXY_PEERS_CHANGED,
     PROXY_HOSTS_CHANGED,
+    PROXY_PARAM_CHANGED,
     PROXY_SIGNAL_COUNT
 };
 
@@ -76,6 +77,7 @@ typedef struct nfc_adapter_client_object {
     GStrV* tags;
     GStrV* peers;
     GStrV* hosts;
+    GUtilData* la_nfcid1;
     GDBusConnection* connection;
     OrgSailfishosNfcAdapter* proxy;
     gulong proxy_signal_id[PROXY_SIGNAL_COUNT];
@@ -106,6 +108,9 @@ NFC_CLIENT_BASE_ASSERT_COUNT(NFC_ADAPTER_PROPERTY_COUNT);
 
 static char* nfc_adapter_client_empty_strv = NULL;
 static GHashTable* nfc_adapter_client_table;
+
+static const char PARAM_T4_NDEF[] = "T4_NDEF";
+static const char PARAM_LA_NFCID1[] = "LA_NFCID1";
 
 static
 void
@@ -245,7 +250,66 @@ nfc_adapter_client_update_valid_and_present(
 
 static
 void
-nfc_adapter_client_apply_all(
+nfc_adapter_client_update_t4_ndef(
+    NfcAdapterClientObject* self,
+    GVariant* value)
+{
+    GVariant* tmp = NULL;
+
+    if (g_variant_is_of_type(value, G_VARIANT_TYPE_VARIANT)) {
+        value = tmp = g_variant_get_variant(value);
+    }
+
+    if  (g_variant_is_of_type(value, G_VARIANT_TYPE_BOOLEAN)) {
+        NfcAdapterClient* adapter = &self->pub;
+        const gboolean b = g_variant_get_boolean(value);
+
+        if (adapter->t4_ndef != b) {
+            adapter->t4_ndef = b;
+            GDEBUG("%s: T4_NDEF = %s", self->name, b ? "on" : "off");
+            nfc_adapter_client_queue_signal(self, T4_NDEF);
+        }
+    }
+
+    if (tmp) {
+        g_variant_unref(tmp);
+    }
+}
+
+static
+void
+nfc_adapter_client_update_la_nfcid1(
+    NfcAdapterClientObject* self,
+    GVariant* value)
+{
+    GVariant* tmp = NULL;
+
+    if (g_variant_is_of_type(value, G_VARIANT_TYPE_VARIANT)) {
+        value = tmp = g_variant_get_variant(value);
+    }
+
+    if (g_variant_is_of_type(value, G_VARIANT_TYPE_BYTESTRING)) {
+        NfcAdapterClient* adapter = &self->pub;
+        GUtilData data;
+
+        data.bytes = g_variant_get_data(value);
+        data.size = g_variant_get_size(value);
+        if (!gutil_data_equal(self->la_nfcid1, &data)) {
+            g_free(self->la_nfcid1);
+            adapter->la_nfcid1 = self->la_nfcid1 = gutil_data_copy(&data);
+            DUMP_DATA(self->name, "LA_NFCID1", "=", self->la_nfcid1);
+            nfc_adapter_client_queue_signal(self, LA_NFCID1);
+        }
+    }
+
+    if (tmp) {
+        g_variant_unref(tmp);
+    }
+}
+
+static
+void
+nfc_adapter_client_init_finished(
     NfcAdapterClientObject* self,
     gboolean enabled,
     gboolean powered,
@@ -255,7 +319,8 @@ nfc_adapter_client_apply_all(
     char** take_tags,
     char** take_peers,
     char** take_hosts,
-    NFC_TECH supported_techs)
+    NFC_TECH supported_techs,
+    GVariant* params)
 {
     NfcAdapterClient* adapter = &self->pub;
 
@@ -280,6 +345,28 @@ nfc_adapter_client_apply_all(
     nfc_adapter_client_update_tags(self, take_tags, take_tags);
     nfc_adapter_client_update_peers(self, take_peers, take_peers);
     nfc_adapter_client_update_hosts(self, take_hosts, take_hosts);
+    if (params) {
+        GVariantIter it;
+        GVariant* entry;
+
+        for (g_variant_iter_init(&it, params);
+             (entry = g_variant_iter_next_value(&it)) != NULL;
+             g_variant_unref(entry)) {
+            GVariant* dict_key = g_variant_get_child_value(entry, 0);
+            GVariant* dict_value = g_variant_get_child_value(entry, 1);
+            const char* name = g_variant_get_string(dict_key, NULL);
+
+            if (!g_strcmp0(name, PARAM_T4_NDEF)) {
+                nfc_adapter_client_update_t4_ndef(self, dict_value);
+            } else if (!g_strcmp0(name, PARAM_LA_NFCID1)) {
+                nfc_adapter_client_update_la_nfcid1(self, dict_value);
+            } else {
+                GDEBUG("%s: Unexpected adapter param '%s'", self->name, name);
+            }
+            g_variant_unref(dict_key);
+            g_variant_unref(dict_value);
+        }
+    }
 }
 
 static
@@ -304,8 +391,8 @@ nfc_adapter_client_drop_proxy(
         adapter->present = FALSE;
         nfc_adapter_client_queue_signal(self, PRESENT);
     }
-    nfc_adapter_client_apply_all(self, FALSE, FALSE, NFC_MODE_NONE,
-        NFC_MODE_NONE, FALSE, NULL, NULL, NULL, NFC_TECH_NONE);
+    nfc_adapter_client_init_finished(self, FALSE, FALSE, NFC_MODE_NONE,
+        NFC_MODE_NONE, FALSE, NULL, NULL, NULL, NFC_TECH_NONE, NULL);
 }
 
 static
@@ -451,6 +538,66 @@ nfc_adapter_client_hosts_changed(
 
 static
 void
+nfc_adapter_client_param_changed(
+    OrgSailfishosNfcAdapter* proxy,
+    const char* name,
+    GVariant* value,
+    NfcAdapterClientObject* self)
+{
+    /* We may receive a signal before the initial query has completed */
+    GASSERT(!self->proxy || self->proxy == proxy);
+
+    if (!g_strcmp0(name, PARAM_T4_NDEF)) {
+        nfc_adapter_client_update_t4_ndef(self, value);
+    } else if (!g_strcmp0(name, PARAM_LA_NFCID1)) {
+        nfc_adapter_client_update_la_nfcid1(self, value);
+    }
+    nfc_adapter_client_emit_queued_signals(self);
+}
+
+static
+void
+nfc_adapter_client_get_all4_done(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcAdapterClientObject* self = THIS(user_data);
+    GError* error = NULL;
+    gint version;
+    guint supported_modes, mode, supported_techs;
+    gboolean enabled, powered, target_present;
+    gchar** tags;
+    gchar** peers;
+    gchar** hosts;
+    GVariant* params;
+
+    GASSERT(self->proxy_initializing);
+    self->proxy_initializing = FALSE;
+    if (org_sailfishos_nfc_adapter_call_get_all4_finish(self->proxy, &version,
+        &enabled, &powered, &supported_modes, &mode, &target_present, &tags,
+        &peers, &hosts, &supported_techs, &params, result, &error)) {
+        GASSERT(self->pub.version == version);
+        GDEBUG("%s: Modes = 0x%02x", self->name, supported_modes);
+        GDEBUG("%s: Techs = 0x%02x", self->name, supported_techs);
+        /* Passing ownership of tags, peers and hosts to self */
+        nfc_adapter_client_init_finished(self, enabled, powered,
+            supported_modes, mode, target_present, tags, peers, hosts,
+            supported_techs, params);
+        g_variant_unref(params);
+    } else {
+        GERR("%s", GERRMSG(error));
+        g_error_free(error);
+        /* Need to retry? */
+        nfc_adapter_client_drop_proxy(self);
+    }
+    nfc_adapter_client_update_valid_and_present(self);
+    nfc_adapter_client_emit_queued_signals(self);
+    g_object_unref(self);
+}
+
+static
+void
 nfc_adapter_client_get_all3_done(
     GObject* proxy,
     GAsyncResult* result,
@@ -470,11 +617,13 @@ nfc_adapter_client_get_all3_done(
     if (org_sailfishos_nfc_adapter_call_get_all3_finish(self->proxy, &version,
         &enabled, &powered, &supported_modes, &mode, &target_present, &tags,
         &peers, &hosts, &supported_techs, result, &error)) {
-        /* Passing ownership of tags, peers and hosts to self */
+        GASSERT(self->pub.version == version);
         GDEBUG("%s: Modes = 0x%02x", self->name, supported_modes);
         GDEBUG("%s: Techs = 0x%02x", self->name, supported_techs);
-        nfc_adapter_client_apply_all(self, enabled, powered, supported_modes,
-            mode, target_present, tags, peers, hosts, supported_techs);
+        /* Passing ownership of tags, peers and hosts to self */
+        nfc_adapter_client_init_finished(self, enabled, powered,
+            supported_modes, mode, target_present, tags, peers, hosts,
+            supported_techs, NULL);
     } else {
         GERR("%s", GERRMSG(error));
         g_error_free(error);
@@ -485,7 +634,6 @@ nfc_adapter_client_get_all3_done(
     nfc_adapter_client_emit_queued_signals(self);
     g_object_unref(self);
 }
-
 
 static
 void
@@ -507,10 +655,12 @@ nfc_adapter_client_get_all2_done(
     if (org_sailfishos_nfc_adapter_call_get_all2_finish(self->proxy, &version,
         &enabled, &powered, &supported_modes, &mode, &target_present, &tags,
         &peers, result, &error)) {
-        /* Passing ownership of tags and peers to self */
+        GASSERT(self->pub.version == version);
         GDEBUG("%s: Modes = 0x%02x", self->name, supported_modes);
-        nfc_adapter_client_apply_all(self, enabled, powered, supported_modes,
-            mode, target_present, tags, peers, NULL, NFC_TECH_NONE);
+        /* Passing ownership of tags and peers to self */
+        nfc_adapter_client_init_finished(self, enabled, powered,
+            supported_modes, mode, target_present, tags, peers, NULL,
+            NFC_TECH_NONE, NULL);
     } else {
         GERR("%s", GERRMSG(error));
         g_error_free(error);
@@ -541,9 +691,11 @@ nfc_adapter_client_get_all_done(
     if (org_sailfishos_nfc_adapter_call_get_all_finish(self->proxy, &version,
         &enabled, &powered, &supported_modes, &mode, &target_present, &tags,
         result, &error)) {
+        GASSERT(self->pub.version == version);
         /* Passing ownership of tags to self */
-        nfc_adapter_client_apply_all(self, enabled, powered, supported_modes,
-            mode, target_present, tags, NULL, NULL, NFC_TECH_NONE);
+        nfc_adapter_client_init_finished(self, enabled, powered,
+            supported_modes, mode, target_present, tags, NULL, NULL,
+            NFC_TECH_NONE, NULL);
     } else {
         GERR("%s", GERRMSG(error));
         g_error_free(error);
@@ -563,17 +715,20 @@ nfc_adapter_client_get_interface_version_done(
     gpointer user_data)
 {
     NfcAdapterClientObject* self = THIS(user_data);
+    NfcAdapterClient* adapter = &self->pub;
     GError* error = NULL;
-    gint version;
 
     if (org_sailfishos_nfc_adapter_call_get_interface_version_finish
-       (self->proxy, &version, result, &error)) {
-        GDEBUG("org.sailfishos.nfc.Adapter v%d", version);
+       (self->proxy, &adapter->version, result, &error)) {
+        GDEBUG("org.sailfishos.nfc.Adapter v%d", adapter->version);
         GASSERT(self->proxy_initializing);
-        if (version >= 3) {
+        if (adapter->version >= 4) {
+            org_sailfishos_nfc_adapter_call_get_all4(self->proxy, NULL,
+                nfc_adapter_client_get_all4_done, g_object_ref(self));
+        } else if (adapter->version >= 3) {
             org_sailfishos_nfc_adapter_call_get_all3(self->proxy, NULL,
                 nfc_adapter_client_get_all3_done, g_object_ref(self));
-        } else if (version >= 2) {
+        } else if (adapter->version >= 2) {
             org_sailfishos_nfc_adapter_call_get_all2(self->proxy, NULL,
                 nfc_adapter_client_get_all2_done, g_object_ref(self));
         } else {
@@ -626,6 +781,9 @@ nfc_adapter_client_init_2(
         self->proxy_signal_id[PROXY_HOSTS_CHANGED] =
             g_signal_connect(self->proxy, "hosts-changed",
                 G_CALLBACK(nfc_adapter_client_hosts_changed), self);
+        self->proxy_signal_id[PROXY_PARAM_CHANGED] =
+            g_signal_connect(self->proxy, "param-changed",
+                G_CALLBACK(nfc_adapter_client_param_changed), self);
         org_sailfishos_nfc_adapter_call_get_interface_version(self->proxy,
             NULL, nfc_adapter_client_get_interface_version_done,
             g_object_ref(self));
@@ -792,10 +950,9 @@ nfc_adapter_client_object_init(
             NFC_DAEMON_PROPERTY_ADAPTERS,
             nfc_adapter_client_daemon_changed, self);
     self->proxy_initializing = TRUE;
-    self->connection = nfc_daemon_client_connection(self->daemon);
-    if (self->connection) {
-        g_object_ref(self->connection);
-    }
+    gutil_object_ref(self->connection =
+        nfc_daemon_client_connection(self->daemon));
+    adapter->t4_ndef = TRUE;
 }
 
 static
@@ -814,6 +971,7 @@ nfc_adapter_client_object_finalize(
     g_strfreev(self->tags);
     g_strfreev(self->peers);
     g_strfreev(self->hosts);
+    g_free(self->la_nfcid1);
     if (adapter->path) {
         g_hash_table_remove(nfc_adapter_client_table, adapter->path);
         if (g_hash_table_size(nfc_adapter_client_table) == 0) {
