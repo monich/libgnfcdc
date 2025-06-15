@@ -1,3 +1,9 @@
+libgnfcdc (1.2.0) unstable; urgency=low
+
+  * Added adapter parameters API (requires nfcd 1.2.2)
+
+ -- Slava Monich <slava@monich.com>  Sat, Sun, 15 Jun 2025 05:55:41 +0300
+
 libgnfcdc (1.1.1) unstable; urgency=low
 
   * Fixed corner case in the signal emission
