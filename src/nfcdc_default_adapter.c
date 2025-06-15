@@ -88,6 +88,20 @@ NFC_CLIENT_BASE_ASSERT_COUNT(NFC_DEFAULT_ADAPTER_PROPERTY_COUNT);
 static char* nfc_default_adapter_empty_strv = NULL;
 static NfcDefaultAdapterObject* nfc_default_adapter_instance = NULL;
 
+static NFC_DEFAULT_ADAPTER_PROPERTY nfc_default_adapter_param_prop[] = {
+    NFC_DEFAULT_ADAPTER_PROPERTY_ADAPTER,
+    NFC_DEFAULT_ADAPTER_PROPERTY_VALID
+};
+
+struct nfc_default_adapter_param_req {
+    NfcDefaultAdapter* da;
+    NfcAdapterClient* adapter;
+    NfcAdapterParamReq* adapter_req;
+    gboolean reset;
+    GPtrArray* params;
+    gulong prop_id[G_N_ELEMENTS(nfc_default_adapter_param_prop)];
+};
+
 /*==========================================================================*
  * Implementation
  *==========================================================================*/
@@ -327,6 +341,33 @@ nfc_default_adapter_daemon_adapters_changed(
     nfc_default_adapter_emit_queued_signals(self);
 }
 
+static
+void
+nfc_default_adapter_param_req_update(
+    NfcDefaultAdapterParamReq* req)
+{
+    NfcDefaultAdapter* da = req->da;
+    NfcAdapterClient* adapter = da->valid ? da->adapter : NULL;
+
+    if (req->adapter != adapter) {
+        nfc_adapter_param_req_free(req->adapter_req);
+        nfc_adapter_client_unref(req->adapter);
+        req->adapter_req = nfc_adapter_param_req_new(req->adapter =
+            nfc_adapter_client_ref(adapter), req->reset, req->params ?
+            (const NfcAdapterParamPtrC*) req->params->pdata : NULL);
+    }
+}
+
+static
+void
+nfc_default_adapter_param_req_event(
+    NfcDefaultAdapter* adapter,
+    NFC_DEFAULT_ADAPTER_PROPERTY property,
+    void* user_data)
+{
+    nfc_default_adapter_param_req_update(user_data);
+}
+
 /*==========================================================================*
  * API
  *==========================================================================*/
@@ -393,6 +434,59 @@ nfc_default_adapter_remove_handlers(
     gutil_disconnect_handlers(nfc_default_adapter_object_cast(da), ids, n);
 }
 
+NfcDefaultAdapterParamReq*
+nfc_default_adapter_param_req_new(
+    NfcDefaultAdapter* da,
+    gboolean reset,
+    const NfcAdapterParamPtrC* params) /* Since 1.2.0 */
+{
+    if (da && (reset || (params && params[0]))) {
+        gsize i;
+        NfcDefaultAdapterParamReq* req =
+            g_slice_new0(NfcDefaultAdapterParamReq);
+
+        req->da = nfc_default_adapter_ref(da);
+        req->reset = reset;
+        if (params) {
+            const NfcAdapterParamPtrC* ptr = params;
+
+            /* The list is NULL terminated */
+            req->params = g_ptr_array_new_with_free_func(g_free);
+            while (*ptr) {
+                const NfcAdapterParam* p = *ptr++;
+
+                g_ptr_array_add(req->params, gutil_memdup(p, sizeof(*p)));
+            }
+            g_ptr_array_add(req->params, NULL);
+        }
+
+        for (i = 0; i < G_N_ELEMENTS(nfc_default_adapter_param_prop); i++) {
+            req->prop_id[i] = nfc_default_adapter_add_property_handler(da,
+                nfc_default_adapter_param_prop[i],
+                nfc_default_adapter_param_req_event, req);
+        }
+        nfc_default_adapter_param_req_update(req);
+        return req;
+    }
+    return NULL;
+}
+
+void
+nfc_default_adapter_param_req_free(
+    NfcDefaultAdapterParamReq* req) /* Since 1.2.0 */
+{
+    if (G_LIKELY(req)) {
+        nfc_default_adapter_remove_all_handlers(req->da, req->prop_id);
+        nfc_default_adapter_unref(req->da);
+        nfc_adapter_param_req_free(req->adapter_req);
+        nfc_adapter_client_unref(req->adapter);
+        if (req->params) {
+            g_ptr_array_free(req->params, TRUE);
+        }
+        gutil_slice_free(req);
+    }
+}
+
 /*==========================================================================*
  * Internals
  *==========================================================================*/
@@ -448,6 +542,7 @@ nfc_default_adapter_object_class_init(
 {
     G_OBJECT_CLASS(klass)->finalize = nfc_default_adapter_object_finalize;
     klass->public_offset = G_STRUCT_OFFSET(NfcDefaultAdapterObject, pub);
+    klass->valid_offset = G_STRUCT_OFFSET(NfcDefaultAdapterObject, pub.valid);
 }
 
 /*

@@ -64,6 +64,24 @@ typedef enum nfc_adapter_property {
     NFC_ADAPTER_PROPERTY_COUNT
 } NFC_ADAPTER_PROPERTY;
 
+typedef enum nfc_adapter_param_key {
+    NFC_ADAPTER_PARAM_KEY_NONE,
+    NFC_ADAPTER_PARAM_KEY_T4_NDEF,
+    NFC_ADAPTER_PARAM_KEY_LA_NFCID1
+} NFC_ADAPTER_PARAM_KEY; /* Since 1.2.0 */
+
+typedef union nfc_adapter_param_value {
+    gboolean b;
+    GUtilData data;
+} NfcAdapterParamValue; /* Since 1.2.0 */
+
+typedef struct nfc_adapter_param {
+    NFC_ADAPTER_PARAM_KEY key;
+    NfcAdapterParamValue value;
+} NfcAdapterParam; /* Since 1.2.0 */
+
+typedef const NfcAdapterParam* NfcAdapterParamPtrC; /* Since 1.2.0 */
+
 /* NFC_ADAPTER_MODE was replaced with NFC_MODE in 1.0.6 */
 #define NFC_ADAPTER_MODE                NFC_MODE
 #define NFC_ADAPTER_MODE_NONE           NFC_MODE_NONE
@@ -132,6 +150,21 @@ nfc_adapter_client_remove_handlers(
 
 #define nfc_adapter_client_remove_all_handlers(adapter, ids) \
     nfc_adapter_client_remove_handlers(adapter, ids, G_N_ELEMENTS(ids))
+
+/* N.B. NfcAdapterParamReq holds a reference to NfcAdapterClient */
+
+typedef struct nfc_adapter_param_req NfcAdapterParamReq; /* Since 1.2.0 */
+
+NfcAdapterParamReq*
+nfc_adapter_param_req_new(
+    NfcAdapterClient* adapter,
+    gboolean reset,
+    const NfcAdapterParamPtrC* key) /* Since 1.2.0 */
+    G_GNUC_WARN_UNUSED_RESULT;
+
+void
+nfc_adapter_param_req_free(
+    NfcAdapterParamReq* req); /* Since 1.2.0 */
 
 G_END_DECLS
 

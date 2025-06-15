@@ -112,6 +112,16 @@ static GHashTable* nfc_adapter_client_table;
 static const char PARAM_T4_NDEF[] = "T4_NDEF";
 static const char PARAM_LA_NFCID1[] = "LA_NFCID1";
 
+struct nfc_adapter_param_req {
+    gint ref_count;
+    NfcAdapterClientObject* client;
+    GVariant* params;
+    gboolean pending;
+    gboolean reset;
+    gulong valid_id;
+    guint id;
+};
+
 static
 void
 nfc_adapter_client_reinit(
@@ -819,6 +829,150 @@ nfc_adapter_client_reinit(
 }
 
 /*==========================================================================*
+ * Param request
+ *==========================================================================*/
+
+static
+NfcAdapterParamReq*
+nfc_adapter_param_req_ref(
+    NfcAdapterParamReq* req)
+{
+    if (G_LIKELY(req)) {
+        g_atomic_int_inc(&req->ref_count);
+    }
+    return req;
+}
+
+static
+void
+nfc_adapter_param_req_unref(
+    NfcAdapterParamReq* req)
+{
+    if (G_LIKELY(req) && g_atomic_int_dec_and_test(&req->ref_count)) {
+        if (req->id && req->client->proxy) {
+            GDEBUG("%s: Releasing param req %u", req->client->name, req->id);
+            org_sailfishos_nfc_adapter_call_release_params(req->client->proxy,
+                req->id, NULL, NULL, NULL);
+        }
+        g_variant_unref(req->params);
+        g_object_unref(req->client);
+        gutil_slice_free(req);
+    }
+}
+
+static
+void
+nfc_adapter_param_req_complete(
+    GObject* object,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcAdapterParamReq* req = user_data;
+    OrgSailfishosNfcAdapter* proxy = ORG_SAILFISHOS_NFC_ADAPTER(object);
+    GError* error = NULL;
+    guint id = 0;
+
+    req->pending = FALSE;
+    if (org_sailfishos_nfc_adapter_call_request_params_finish(proxy, &id,
+        result, &error)) {
+        if (req->id) {
+            GDEBUG("%s: Dropping param req %u", req->client->name, req->id);
+            org_sailfishos_nfc_adapter_call_release_params(req->client->proxy,
+                req->id, NULL, NULL, NULL);
+        }
+        GDEBUG("%s: Param req id %u", req->client->name, id);
+        req->id = id;
+    } else {
+        GERR("%s", GERRMSG(error));
+        g_error_free(error);
+    }
+    nfc_adapter_param_req_unref(req);
+}
+
+static
+void
+nfc_adapter_param_req_submit(
+    NfcAdapterParamReq* req)
+{
+    if (!req->pending) {
+        req->pending = TRUE;
+        org_sailfishos_nfc_adapter_call_request_params(req->client->proxy,
+            req->params, req->reset, NULL, nfc_adapter_param_req_complete,
+            nfc_adapter_param_req_ref(req));
+    }
+}
+
+static
+void
+nfc_adapter_param_req_update_valid(
+    NfcAdapterClient* adapter,
+    NFC_ADAPTER_PROPERTY property,
+    void* user_data)
+{
+    NfcAdapterParamReq* req = user_data;
+
+    if (adapter->valid) {
+        nfc_adapter_param_req_submit(req);
+    } else {
+        req->pending = FALSE; /* Allow to submit next request right away */
+        req->id = 0;
+    }
+}
+
+static
+NfcAdapterParamReq*
+nfc_adapter_param_req_alloc(
+    NfcAdapterClient* adapter,
+    gboolean reset,
+    GVariant* params)
+{
+    NfcAdapterClientObject* client = nfc_adapter_client_object_cast(adapter);
+    NfcAdapterParamReq* req = g_slice_new0(NfcAdapterParamReq);
+
+    g_atomic_int_set(&req->ref_count, 1);
+    g_object_ref(req->client = client);
+    req->reset = reset;
+    req->params = g_variant_ref_sink(params);
+    req->valid_id = nfc_adapter_client_add_property_handler(adapter,
+        NFC_ADAPTER_PROPERTY_VALID, nfc_adapter_param_req_update_valid, req);
+    if (adapter->valid) {
+        nfc_adapter_param_req_submit(req);
+    }
+    return req;
+}
+
+static
+void
+nfc_adapter_param_add(
+    GVariantBuilder* builder,
+    NFC_ADAPTER_PARAM_KEY key,
+    const NfcAdapterParamValue* value)
+{
+    static const char* format = "{sv}";
+
+    /* Append known params to GVariant dictionary */
+    switch (key) {
+    case NFC_ADAPTER_PARAM_KEY_NONE:
+        break;
+    case NFC_ADAPTER_PARAM_KEY_T4_NDEF:
+        g_variant_builder_add(builder, format, PARAM_T4_NDEF,
+            g_variant_new_boolean(value->b));
+        break;
+    case NFC_ADAPTER_PARAM_KEY_LA_NFCID1:
+        if (value->data.size) {
+            g_variant_builder_add(builder, format, PARAM_LA_NFCID1,
+                g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE,
+                    value->data.bytes, value->data.size, 1));
+        } else {
+            g_variant_builder_add(builder, format, PARAM_LA_NFCID1,
+                g_variant_new_from_data(G_VARIANT_TYPE_BYTESTRING,
+                    NULL, 0, TRUE, NULL, NULL));
+        }
+        break;
+    }
+}
+
+/*==========================================================================*
  * Internal API
  *==========================================================================*/
 
@@ -875,6 +1029,7 @@ nfc_adapter_client_new(
     return NULL;
 }
 
+
 NfcAdapterClient*
 nfc_adapter_client_ref(
     NfcAdapterClient* adapter)
@@ -924,6 +1079,39 @@ nfc_adapter_client_remove_handlers(
     guint n)
 {
     gutil_disconnect_handlers(nfc_adapter_client_object_cast(adapter), ids, n);
+}
+
+NfcAdapterParamReq*
+nfc_adapter_param_req_new(
+    NfcAdapterClient* adapter,
+    gboolean reset,
+    const NfcAdapterParamPtrC* params) /* Since 1.2.0 */
+{
+    if (adapter && (reset || (params && params[0]))) {
+        GVariantBuilder dict;
+
+        g_variant_builder_init(&dict, G_VARIANT_TYPE_VARDICT);
+        if (params) {
+            const NfcAdapterParamPtrC* ptr = params;
+
+            /* The list is NULL terminated */
+            while (*ptr) {
+                const NfcAdapterParam* p = *ptr++;
+
+                nfc_adapter_param_add(&dict, p->key, &p->value);
+            }
+        }
+        return nfc_adapter_param_req_alloc(adapter, reset,
+            g_variant_builder_end(&dict));
+    }
+    return NULL;
+}
+
+void
+nfc_adapter_param_req_free(
+    NfcAdapterParamReq* req) /* Since 1.2.0 */
+{
+    nfc_adapter_param_req_unref(req);
 }
 
 /*==========================================================================*

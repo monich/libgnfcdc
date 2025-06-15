@@ -53,6 +53,7 @@ typedef struct app {
     GMainLoop* loop;
     gboolean stopped;
     const char* adapter_path;
+    GHashTable* params;
     int ret;
 } App;
 
@@ -207,17 +208,40 @@ app_run(
     guint sigint = g_unix_signal_add(SIGINT, app_signal, app);
     NfcAdapterClient* adapter = NULL;
     NfcDefaultAdapter* da = NULL;
+    NfcAdapterParamReq* apr = NULL;
+    NfcDefaultAdapterParamReq* dapr = NULL;
+    GPtrArray* params = NULL;
     gulong id;
+
+    if (app->params) {
+        GHashTableIter it;
+        gpointer value;
+
+        params = g_ptr_array_sized_new(g_hash_table_size(app->params) + 1);
+        g_hash_table_iter_init(&it, app->params);
+        while (g_hash_table_iter_next(&it, NULL, &value)) {
+            g_ptr_array_add(params, value);
+        }
+        g_ptr_array_add(params, NULL); /* NULL terminate */
+    }
 
     if (app->adapter_path) {
         adapter = nfc_adapter_client_new(app->adapter_path);
         id = nfc_adapter_client_add_property_handler(adapter,
             NFC_ADAPTER_PROPERTY_ANY, app_adapter_changed, app);
+        if (params) {
+            apr = nfc_adapter_param_req_new(adapter, FALSE,
+                (const NfcAdapterParamPtrC*) params->pdata);
+        }
     } else {
         da = nfc_default_adapter_new();
         id = nfc_default_adapter_add_property_handler(da,
             NFC_DEFAULT_ADAPTER_PROPERTY_ANY, app_default_adapter_changed,
             app);
+        if (params) {
+            dapr = nfc_default_adapter_param_req_new(da, FALSE,
+                (const NfcAdapterParamPtrC*) params->pdata);
+        }
     }
 
     app->ret = RET_ERR;
@@ -225,8 +249,15 @@ app_run(
     g_main_loop_run(app->loop);
     g_source_remove(sigterm);
     g_source_remove(sigint);
+    nfc_adapter_param_req_free(apr);
+    nfc_default_adapter_param_req_free(dapr);
     g_main_loop_unref(app->loop);
     app->loop = NULL;
+    if (app->params) {
+        g_ptr_array_free(params, TRUE);
+        g_hash_table_destroy(app->params);
+        app->params = NULL;
+    }
 
     if (adapter) {
         nfc_adapter_client_remove_handler(adapter, id);
@@ -236,6 +267,21 @@ app_run(
         nfc_default_adapter_unref(da);
     }
     return app->ret;
+}
+
+static
+void
+app_add_param(
+    App* app,
+    NfcAdapterParam* param)
+{
+    if (!app->params) {
+        app->params = g_hash_table_new_full(g_direct_hash, g_direct_equal,
+            NULL, g_free);
+    }
+
+    /* Take ownership of the param */
+    g_hash_table_insert(app->params, GINT_TO_POINTER(param->key), param);
 }
 
 static
@@ -264,6 +310,79 @@ app_opt_quiet(
 
 static
 gboolean
+app_opt_t4_ndef(
+    const char* name,
+    const char* value,
+    gpointer user_data,
+    GError** error)
+{
+    App* app = user_data;
+    NfcAdapterParam param;
+
+    memset(&param, 0, sizeof(param));
+    param.key = NFC_ADAPTER_PARAM_KEY_T4_NDEF;
+    param.value.b = TRUE;
+
+    if (value) {
+        if (!g_ascii_strcasecmp(value, "off") ||
+            !g_ascii_strcasecmp(value, "false")) {
+            param.value.b = FALSE;
+        } else if (g_ascii_strcasecmp(value, "on") &&
+            g_ascii_strcasecmp(value, "true")) {
+            g_propagate_error(error, g_error_new(G_OPTION_ERROR,
+                G_OPTION_ERROR_BAD_VALUE, "Invalid t4_ndef value '%s'",
+                value));
+            return FALSE;
+        }
+    }
+
+    app_add_param(app, gutil_memdup(&param, sizeof(param)));
+    return TRUE;
+}
+
+static
+gboolean
+app_opt_nfcid1(
+    const char* name,
+    const char* value,
+    gpointer user_data,
+    GError** error)
+{
+    App* app = user_data;
+    GBytes* bytes = NULL;
+    NfcAdapterParam* param;
+    GUtilData data;
+
+    if (value) {
+        if ((bytes = gutil_hex2bytes(value, -1))) {
+            data.bytes = g_bytes_get_data(bytes, &data.size);
+        } else {
+            g_propagate_error(error, g_error_new(G_OPTION_ERROR,
+                G_OPTION_ERROR_BAD_VALUE, "Invalid hex data '%s'", value));
+            return FALSE;
+        }
+    } else {
+        memset(&data, 0, sizeof(data));
+    }
+
+    param = g_malloc0(sizeof(NfcAdapterParam) + data.size);
+    param->key = NFC_ADAPTER_PARAM_KEY_LA_NFCID1;
+    if ((param->value.data.size = data.size)) {
+        void* pdata = param + 1;
+
+        param->value.data.bytes = pdata;
+        memcpy(pdata, data.bytes, data.size);
+    }
+
+    if (bytes) {
+        g_bytes_unref(bytes);
+    }
+    app_add_param(app, param);
+    return TRUE;
+}
+
+static
+gboolean
 app_init(
     App* app,
     int argc,
@@ -275,12 +394,20 @@ app_init(
           app_opt_verbose, "Enable verbose output", NULL },
         { "quiet", 'q', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK,
           app_opt_quiet, "Be quiet", NULL },
+        { "t4-ndef", 0, G_OPTION_FLAG_OPTIONAL_ARG,
+           G_OPTION_ARG_CALLBACK, &app_opt_t4_ndef,
+          "Set T4_NDEF option (request NDEF from Type4 tags)", "[on|off]" },
+        { "nfcid1", 0, G_OPTION_FLAG_OPTIONAL_ARG,
+           G_OPTION_ARG_CALLBACK, &app_opt_nfcid1,
+          "Set LA_NFCID1 option (NFCID1 in NFC-A Listen mode)", "hex" },
         { NULL }
     };
     GError* error = NULL;
     GOptionContext* options = g_option_context_new("[PATH]");
+    GOptionGroup* group = g_option_group_new("", "", "", app, NULL);
 
-    g_option_context_add_main_entries(options, entries, NULL);
+    g_option_group_add_entries(group, entries);
+    g_option_context_set_main_group(options, group);
     if (g_option_context_parse(options, &argc, &argv, &error)) {
         if (argc < 3) {
             if (argc == 2) {

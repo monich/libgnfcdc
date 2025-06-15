@@ -128,6 +128,21 @@ nfc_default_adapter_remove_handlers(
 #define nfc_default_adapter_remove_all_handlers(adapter, ids) \
     nfc_default_adapter_remove_handlers(adapter, ids, G_N_ELEMENTS(ids))
 
+/* N.B. NfcDefaultAdapterParamReq holds a reference to NfcDefaultAdapter */
+typedef struct nfc_default_adapter_param_req
+    NfcDefaultAdapterParamReq; /* Since 1.2.0 */
+
+NfcDefaultAdapterParamReq*
+nfc_default_adapter_param_req_new(
+    NfcDefaultAdapter* adapter,
+    gboolean reset,
+    const NfcAdapterParamPtrC* params) /* Since 1.2.0 */
+    G_GNUC_WARN_UNUSED_RESULT;
+
+void
+nfc_default_adapter_param_req_free(
+    NfcDefaultAdapterParamReq* req); /* Since 1.2.0 */
+
 G_END_DECLS
 
 #endif /* NFCDC_DEFAUT_ADAPTER_H */
