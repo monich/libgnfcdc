@@ -959,15 +959,8 @@ nfc_adapter_param_add(
             g_variant_new_boolean(value->b));
         break;
     case NFC_ADAPTER_PARAM_KEY_LA_NFCID1:
-        if (value->data.size) {
-            g_variant_builder_add(builder, format, PARAM_LA_NFCID1,
-                g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE,
-                    value->data.bytes, value->data.size, 1));
-        } else {
-            g_variant_builder_add(builder, format, PARAM_LA_NFCID1,
-                g_variant_new_from_data(G_VARIANT_TYPE_BYTESTRING,
-                    NULL, 0, TRUE, NULL, NULL));
-        }
+        g_variant_builder_add(builder, format, PARAM_LA_NFCID1,
+            gutil_data_copy_as_variant(&value->data));
         break;
     }
 }

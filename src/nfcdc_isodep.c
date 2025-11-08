@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -584,12 +584,12 @@ nfc_isodep_client_transmit(
     if (self && apdu && isodep->valid && isodep->present &&
         (complete || destroy) &&
         (!cancel || !g_cancellable_is_cancelled(cancel))) {
-        org_sailfishos_nfc_iso_dep_call_transmit(self->proxy, apdu->cla,
-            apdu->ins, apdu->p1, apdu->p2, g_variant_new_from_data
-            (G_VARIANT_TYPE("ay"), apdu->data.bytes, apdu->data.size,
-            TRUE, NULL, NULL), apdu->le, cancel, nfc_isodep_client_call_done,
-            nfc_isodep_client_call_new(self, nfc_isodep_client_transmit_finish,
-                cancel, G_CALLBACK(complete), user_data, destroy));
+        org_sailfishos_nfc_iso_dep_call_transmit(self->proxy,
+            apdu->cla, apdu->ins, apdu->p1, apdu->p2,
+            gutil_data_copy_as_variant(&apdu->data), apdu->le, cancel,
+            nfc_isodep_client_call_done, nfc_isodep_client_call_new(self,
+                nfc_isodep_client_transmit_finish, cancel,
+                G_CALLBACK(complete), user_data, destroy));
         return TRUE;
     } else {
         /* Destroy callback is always invoked even if we return FALSE */
