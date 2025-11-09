@@ -1,6 +1,6 @@
 Name: libgnfcdc
 
-Version: 1.2.0
+Version: 1.2.1
 Release: 0
 Summary: Glib based NFC Daemon Client
 Group: Development/Libraries
@@ -44,7 +44,6 @@ This package contains the development library for %{name}.
 %make_build LIBDIR=%{_libdir} KEEP_SYMBOLS=1 release pkgconfig
 
 %install
-rm -rf %{buildroot}
 make LIBDIR=%{_libdir} DESTDIR=%{buildroot} install-dev
 
 %post -p /sbin/ldconfig

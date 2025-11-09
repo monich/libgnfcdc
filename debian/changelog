@@ -1,3 +1,9 @@
+libgnfcdc (1.2.1) unstable; urgency=low
+
+  * Added nfc_tag_client_transceive()
+
+ -- Slava Monich <slava@monich.com>  Sun, 09 Nov 2025 07:04:54 +0200
+
 libgnfcdc (1.2.0) unstable; urgency=low
 
   * Added adapter parameters API (requires nfcd 1.2.2)
