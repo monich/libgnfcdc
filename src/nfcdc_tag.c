@@ -92,15 +92,24 @@ NFC_CLIENT_BASE_ASSERT_COUNT(NFC_TAG_PROPERTY_COUNT);
 #define nfc_tag_client_queue_signal(self,NAME) \
     ((self)->base.queued_signals |= SIGNAL_BIT_(NAME))
 
-typedef struct nfc_tag_client_call_data {
+typedef struct nfc_tag_client_call NfcTagClientCall;
+
+typedef
+GError*
+(*NfcTagClientCallFinishFunc)(
+    OrgSailfishosNfcTag* proxy,
+    NfcTagClientCall* call,
+    GAsyncResult* result);
+
+struct nfc_tag_client_call {
     NfcTagClientObject* obj;
-    NfcTagClientCallFunc callback;
-    gboolean (*finish)(OrgSailfishosNfcTag*, GAsyncResult*, GError**);
+    NfcTagClientCallFinishFunc finish;
+    GCallback callback;
     GDestroyNotify destroy;
     void* user_data;
     GCancellable* cancel;
     gulong cancel_id;
-} NfcTagClientCallData;
+};
 
 static char* nfc_tag_client_empty_strv = NULL;
 static GHashTable* nfc_tag_client_table;
@@ -373,9 +382,34 @@ static
 void
 nfc_tag_client_call_cancelled(
     GCancellable* cancel,
-    NfcTagClientCallData* data)
+    NfcTagClientCall* data)
 {
     data->callback = NULL;
+}
+
+static
+NfcTagClientCall*
+nfc_tag_client_call_new(
+    NfcTagClientObject* self,
+    NfcTagClientCallFinishFunc finish,
+    GCancellable* cancel,
+    GCallback callback,
+    void* user_data,
+    GDestroyNotify destroy)
+{
+    NfcTagClientCall* call = g_slice_new0(NfcTagClientCall);
+
+    g_object_ref(call->obj = self);
+    call->finish = finish;
+    call->callback = callback;
+    call->user_data = user_data;
+    call->destroy = destroy;
+    if (cancel) {
+        g_object_ref(call->cancel = cancel);
+        call->cancel_id = g_cancellable_connect(cancel,
+            G_CALLBACK(nfc_tag_client_call_cancelled), call, NULL);
+    }
+    return call;
 }
 
 static
@@ -385,19 +419,10 @@ nfc_tag_client_call_done(
     GAsyncResult* result,
     gpointer user_data)
 {
-    NfcTagClientCallData* call = user_data;
+    NfcTagClientCall* call = user_data;
     NfcTagClientObject* self = call->obj;
-    GError* error = NULL;
+    GError* error = call->finish(ORG_SAILFISHOS_NFC_TAG(proxy), call, result);
 
-    if (!call->finish(ORG_SAILFISHOS_NFC_TAG(proxy), result, &error)) {
-        GWARN("%s: %s", self->name, GERRMSG(error));
-    }
-    if (call->callback) {
-        NfcTagClientCallFunc callback = call->callback;
-
-        call->callback = NULL;
-        callback(&self->pub, error, call->user_data);
-    }
     if (error) {
         g_error_free(error);
     }
@@ -410,6 +435,63 @@ nfc_tag_client_call_done(
     }
     g_object_unref(self);
     gutil_slice_free(call);
+}
+
+static
+GError*
+nfc_tag_client_call_deactivate_finish(
+    OrgSailfishosNfcTag* proxy,
+    NfcTagClientCall* call,
+    GAsyncResult* result)
+{
+    NfcTagClientObject* self = call->obj;
+    GError* error = NULL;
+
+    if (!org_sailfishos_nfc_tag_call_deactivate_finish(proxy,
+        result, &error)) {
+        GWARN("%s: %s", self->name, GERRMSG(error));
+    }
+    if (call->callback) {
+        NfcTagClientCallFunc callback = (NfcTagClientCallFunc) call->callback;
+
+        call->callback = NULL;
+        callback(&self->pub, error, call->user_data);
+    }
+    return error;
+}
+
+static
+GError*
+nfc_tag_client_call_transceive_finish(
+    OrgSailfishosNfcTag* proxy,
+    NfcTagClientCall* call,
+    GAsyncResult* result)
+{
+    NfcTagClientObject* self = call->obj;
+    GError* error = NULL;
+    GVariant* var = NULL;
+
+    if (!org_sailfishos_nfc_tag_call_transceive_finish(proxy, &var,
+        result, &error)) {
+        GWARN("%s: %s", self->name, GERRMSG(error));
+    }
+    if (call->callback) {
+        NfcTagTransceiveFunc callback = (NfcTagTransceiveFunc) call->callback;
+
+        call->callback = NULL;
+        if (error) {
+            callback(&self->pub, NULL, error, call->user_data);
+        } else {
+            GUtilData data;
+
+            data.bytes = g_variant_get_fixed_array(var, &data.size, 1);
+            callback(&self->pub, &data, error, call->user_data);
+        }
+    }
+    if (var) {
+        g_variant_unref(var);
+    }
+    return error;
 }
 
 static
@@ -869,24 +951,50 @@ nfc_tag_client_deactivate(
     if (self && tag->valid && tag->present && (!cancel ||
         !g_cancellable_is_cancelled(cancel))) {
         if (callback || destroy) {
-            NfcTagClientCallData* call = g_slice_new0(NfcTagClientCallData);
-
-            g_object_ref(call->obj = self);
-            call->callback = callback;
-            call->destroy = destroy;
-            call->user_data = user_data;
-            call->finish = org_sailfishos_nfc_tag_call_deactivate_finish;
-            if (cancel) {
-                g_object_ref(call->cancel = cancel);
-                call->cancel_id = g_cancellable_connect(cancel,
-                    G_CALLBACK(nfc_tag_client_call_cancelled), call, NULL);
-            }
             org_sailfishos_nfc_tag_call_deactivate(self->proxy, cancel,
-                nfc_tag_client_call_done, call);
+                nfc_tag_client_call_done, nfc_tag_client_call_new(self,
+                    nfc_tag_client_call_deactivate_finish, cancel,
+                    G_CALLBACK(callback), user_data, destroy));
         } else {
             /* No need to allocate the context */
             org_sailfishos_nfc_tag_call_deactivate(self->proxy, NULL, NULL,
                 NULL);
+        }
+        return TRUE;
+    } else {
+        /* Destroy callback is always invoked even if we return FALSE */
+        if (destroy) {
+            destroy(user_data);
+        }
+        return FALSE;
+    }
+}
+
+gboolean
+nfc_tag_client_transceive(
+    NfcTagClient* tag,
+    const GUtilData* data,
+    GCancellable* cancel,
+    NfcTagTransceiveFunc callback,
+    void* user_data,
+    GDestroyNotify destroy) /* Since 1.2.1 */
+{
+    NfcTagClientObject* self = nfc_tag_client_object_cast(tag);
+
+    /* Transceive appeared in org.sailfishos.nfc.Tag v4 */
+    if (self && tag->valid && tag->present && self->version >= 4 &&
+       (!cancel || !g_cancellable_is_cancelled(cancel))) {
+        GVariant* var = gutil_data_copy_as_variant(data);
+
+        if (callback || destroy) {
+            org_sailfishos_nfc_tag_call_transceive(self->proxy, var, cancel,
+                nfc_tag_client_call_done, nfc_tag_client_call_new(self,
+                    nfc_tag_client_call_transceive_finish, cancel,
+                    G_CALLBACK(callback), user_data, destroy));
+        } else {
+            /* No need to allocate the context */
+            org_sailfishos_nfc_tag_call_transceive(self->proxy, var,
+                NULL, NULL, NULL);
         }
         return TRUE;
     } else {

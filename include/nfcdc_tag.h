@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2025 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -106,6 +106,14 @@ void
     const GError* error,
     void* user_data);
 
+typedef
+void
+(*NfcTagTransceiveFunc)(
+    NfcTagClient* tag,
+    const GUtilData* response,
+    const GError* error,
+    void* user_data); /* Since 1.2.1 */
+
 NfcTagClient*
 nfc_tag_client_new(
     const char* path);
@@ -143,6 +151,15 @@ nfc_tag_client_deactivate(
     NfcTagClientCallFunc callback,
     void* user_data,
     GDestroyNotify destroy); /* Since 1.0.9 */
+
+gboolean
+nfc_tag_client_transceive(
+    NfcTagClient* tag,
+    const GUtilData* data,
+    GCancellable* cancel,
+    NfcTagTransceiveFunc complete,
+    void* user_data,
+    GDestroyNotify destroy); /* Since 1.2.1 */
 
 gulong
 nfc_tag_client_add_property_handler(
