@@ -1,3 +1,9 @@
+libgnfcdc (1.2.2) unstable; urgency=low
+
+  * Added support for LI_A_HB adapter parameter (requires nfcd 1.2.4)
+
+ -- Slava Monich <slava@monich.com>  Tue, 30 Dec 2025 18:35:52 +0200
+
 libgnfcdc (1.2.1) unstable; urgency=low
 
   * Added nfc_tag_client_transceive()
