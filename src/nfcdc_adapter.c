@@ -78,6 +78,7 @@ typedef struct nfc_adapter_client_object {
     GStrV* peers;
     GStrV* hosts;
     GUtilData* la_nfcid1;
+    GUtilData* li_a_hb;
     GDBusConnection* connection;
     OrgSailfishosNfcAdapter* proxy;
     gulong proxy_signal_id[PROXY_SIGNAL_COUNT];
@@ -111,6 +112,7 @@ static GHashTable* nfc_adapter_client_table;
 
 static const char PARAM_T4_NDEF[] = "T4_NDEF";
 static const char PARAM_LA_NFCID1[] = "LA_NFCID1";
+static const char PARAM_LI_A_HB[] = "LI_A_HB";
 
 struct nfc_adapter_param_req {
     gint ref_count;
@@ -319,6 +321,37 @@ nfc_adapter_client_update_la_nfcid1(
 
 static
 void
+nfc_adapter_client_update_li_a_hb(
+    NfcAdapterClientObject* self,
+    GVariant* value)
+{
+    GVariant* tmp = NULL;
+
+    if (g_variant_is_of_type(value, G_VARIANT_TYPE_VARIANT)) {
+        value = tmp = g_variant_get_variant(value);
+    }
+
+    if (g_variant_is_of_type(value, G_VARIANT_TYPE_BYTESTRING)) {
+        NfcAdapterClient* adapter = &self->pub;
+        GUtilData data;
+
+        data.bytes = g_variant_get_data(value);
+        data.size = g_variant_get_size(value);
+        if (!gutil_data_equal(self->li_a_hb, &data)) {
+            g_free(self->li_a_hb);
+            adapter->li_a_hb = self->li_a_hb = gutil_data_copy(&data);
+            DUMP_DATA(self->name, "LI_A_HB", "=", self->li_a_hb);
+            nfc_adapter_client_queue_signal(self, LI_A_HB);
+        }
+    }
+
+    if (tmp) {
+        g_variant_unref(tmp);
+    }
+}
+
+static
+void
 nfc_adapter_client_init_finished(
     NfcAdapterClientObject* self,
     gboolean enabled,
@@ -370,6 +403,8 @@ nfc_adapter_client_init_finished(
                 nfc_adapter_client_update_t4_ndef(self, dict_value);
             } else if (!g_strcmp0(name, PARAM_LA_NFCID1)) {
                 nfc_adapter_client_update_la_nfcid1(self, dict_value);
+            } else if (!g_strcmp0(name, PARAM_LI_A_HB)) {
+                nfc_adapter_client_update_li_a_hb(self, dict_value);
             } else {
                 GDEBUG("%s: Unexpected adapter param '%s'", self->name, name);
             }
@@ -561,6 +596,8 @@ nfc_adapter_client_param_changed(
         nfc_adapter_client_update_t4_ndef(self, value);
     } else if (!g_strcmp0(name, PARAM_LA_NFCID1)) {
         nfc_adapter_client_update_la_nfcid1(self, value);
+    } else if (!g_strcmp0(name, PARAM_LI_A_HB)) {
+        nfc_adapter_client_update_li_a_hb(self, value);
     }
     nfc_adapter_client_emit_queued_signals(self);
 }
@@ -962,6 +999,10 @@ nfc_adapter_param_add(
         g_variant_builder_add(builder, format, PARAM_LA_NFCID1,
             gutil_data_copy_as_variant(&value->data));
         break;
+    case NFC_ADAPTER_PARAM_KEY_LI_A_HB:
+        g_variant_builder_add(builder, format, PARAM_LI_A_HB,
+            gutil_data_copy_as_variant(&value->data));
+        break;
     }
 }
 
@@ -1153,6 +1194,7 @@ nfc_adapter_client_object_finalize(
     g_strfreev(self->peers);
     g_strfreev(self->hosts);
     g_free(self->la_nfcid1);
+    g_free(self->li_a_hb);
     if (adapter->path) {
         g_hash_table_remove(nfc_adapter_client_table, adapter->path);
         if (g_hash_table_size(nfc_adapter_client_table) == 0) {

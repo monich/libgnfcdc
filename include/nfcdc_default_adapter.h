@@ -63,6 +63,8 @@ typedef enum nfc_default_adapter_property {
     /* Since 1.2.0 */
     NFC_DEFAULT_ADAPTER_PROPERTY_T4_NDEF,
     NFC_DEFAULT_ADAPTER_PROPERTY_LA_NFCID1,
+    /* Since 1.2.2 */
+    NFC_DEFAULT_ADAPTER_PROPERTY_LI_A_HB,
     /* Moving target: */
     NFC_DEFAULT_ADAPTER_PROPERTY_COUNT
 } NFC_DEFAULT_ADAPTER_PROPERTY;
@@ -86,6 +88,8 @@ struct nfc_default_adapter {
     int version;                /* Adapter D-Bus interface version */
     gboolean t4_ndef;           /* TRUE for nfcd < 1.2.2 */
     const GUtilData* la_nfcid1; /* NULL for nfcd < 1.2.2 */
+    /* Since 1.2.2 */
+    const GUtilData* li_a_hb;   /* NULL for nfcd < 1.2.4 */
 };
 
 typedef

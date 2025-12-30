@@ -64,6 +64,7 @@ typedef struct nfc_default_adapter_object {
     GStrV* peers;
     GStrV* hosts;
     GUtilData* la_nfcid1;
+    GUtilData* li_a_hb;
 } NfcDefaultAdapterObject;
 
 #define PARENT_CLASS nfc_default_adapter_object_parent_class
@@ -191,6 +192,11 @@ nfc_default_adapter_clear(
         pub->la_nfcid1 = self->la_nfcid1 = NULL;
         nfc_default_adapter_queue_signal(self, LA_NFCID1);
     }
+    if (pub->li_a_hb) {
+        g_free(self->li_a_hb);
+        pub->li_a_hb = self->li_a_hb = NULL;
+        nfc_default_adapter_queue_signal(self, LI_A_HB);
+    }
 }
 
 static
@@ -274,6 +280,11 @@ nfc_default_adapter_sync(
         g_free(self->la_nfcid1);
         pub->la_nfcid1 = self->la_nfcid1 = gutil_data_copy(adapter->la_nfcid1);
         nfc_default_adapter_queue_signal(self, LA_NFCID1);
+    }
+    if (!gutil_data_equal(pub->li_a_hb, adapter->li_a_hb)) {
+        g_free(self->li_a_hb);
+        pub->li_a_hb = self->li_a_hb = gutil_data_copy(adapter->li_a_hb);
+        nfc_default_adapter_queue_signal(self, LI_A_HB);
     }
 }
 
@@ -532,6 +543,7 @@ nfc_default_adapter_object_finalize(
     g_strfreev(self->peers);
     g_strfreev(self->hosts);
     g_free(self->la_nfcid1);
+    g_free(self->li_a_hb);
     G_OBJECT_CLASS(PARENT_CLASS)->finalize(object);
 }
 
