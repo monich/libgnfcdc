@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -62,6 +62,7 @@ enum nfc_daemon_client_proxy_signals {
     CHANGE_ADAPTERS_CHANGED,
     CHANGE_MODE_CHANGED,
     CHANGE_TECHS_CHANGED,
+    CHANGE_BLOCKED_CHANGED,
     CHANGE_SIGNAL_COUNT
 };
 
@@ -411,6 +412,21 @@ nfc_daemon_client_daemon_update_techs(
 
 static
 void
+nfc_daemon_client_daemon_update_blocked(
+    NfcDaemonClientObject* self,
+    gboolean blocked)
+{
+    NfcDaemonClient* pub = &self->pub;
+
+    GDEBUG("NFC %sblocked", blocked ? "" : "not ");
+    if (pub->blocked != blocked) {
+        pub->blocked = blocked;
+        nfc_daemon_client_queue_signal_(self, BLOCKED);
+    }
+}
+
+static
+void
 nfc_daemon_client_daemon_adapters_changed(
     OrgSailfishosNfcDaemon* proxy,
     GStrV* adapters,
@@ -450,6 +466,17 @@ nfc_daemon_client_daemon_techs_changed(
     nfc_daemon_client_emit_queued_signals(self);
 }
 
+static
+void
+nfc_daemon_client_daemon_blocked_changed(
+    OrgSailfishosNfcDaemon* proxy,
+    gboolean blocked,
+    NfcDaemonClientObject* self)
+{
+    nfc_daemon_client_daemon_update_blocked(self, blocked);
+    nfc_daemon_client_emit_queued_signals(self);
+}
+
 #if NFCDC_NEED_PEER_SERVICE
 
 static
@@ -478,6 +505,45 @@ nfc_daemon_client_register_service_done(
 
 static
 void
+nfc_daemon_client_daemon_get_all6_done(
+    GObject* proxy,
+    GAsyncResult* result,
+    gpointer user_data)
+{
+    NfcDaemonClientObject* self = THIS(user_data);
+    OrgSailfishosNfcDaemon* daemon = ORG_SAILFISHOS_NFC_DAEMON(proxy);
+    GError* error = NULL;
+    gint iface_version = 0;
+    char** adapters = NULL;
+    gint version = 0;
+    guint mode = 0, techs = 0;
+    gboolean blocked = FALSE;
+
+    GASSERT(!self->proxy);
+    if (org_sailfishos_nfc_daemon_call_get_all6_finish(daemon,
+        &iface_version, &adapters, &version, &mode, &techs, &blocked,
+        result, &error)) {
+        GASSERT(iface_version >= 6);
+        nfc_daemon_client_daemon_set_version(self, version);
+        nfc_daemon_client_daemon_set_adapters(self, adapters);
+        nfc_daemon_client_daemon_update_mode(self, mode);
+        nfc_daemon_client_daemon_update_techs(self, techs);
+        nfc_daemon_client_daemon_update_blocked(self, blocked);
+        self->proxy = daemon;
+    } else {
+        GERR("Failed to talk to NFC daemon: %s", GERRMSG(error));
+        nfc_daemon_client_set_daemon_error(self, error);
+        gutil_disconnect_handlers(daemon, self->change_signal_id,
+            G_N_ELEMENTS(self->change_signal_id));
+        g_object_unref(daemon);
+    }
+    nfc_daemon_client_update_valid_and_present(self);
+    nfc_daemon_client_emit_queued_signals(self);
+    g_object_unref(self);
+}
+
+static
+void
 nfc_daemon_client_daemon_get_all4_done(
     GObject* proxy,
     GAsyncResult* result,
@@ -494,7 +560,7 @@ nfc_daemon_client_daemon_get_all4_done(
     GASSERT(!self->proxy);
     if (org_sailfishos_nfc_daemon_call_get_all4_finish(daemon,
         &iface_version, &adapters, &version, &mode, &techs, result, &error)) {
-        GASSERT(iface_version >= 3);
+        GASSERT(iface_version >= 4);
         nfc_daemon_client_daemon_set_version(self, version);
         nfc_daemon_client_daemon_set_adapters(self, adapters);
         nfc_daemon_client_daemon_update_mode(self, mode);
@@ -600,7 +666,10 @@ nfc_daemon_client_daemon_get_all_done(
 
         GDEBUG("NFC daemon interface version %d", iface_version);
         nfc_daemon_client_daemon_set_adapters(self, adapters);
-        if (iface_version >= 4) {
+        if (iface_version >= 6) {
+            org_sailfishos_nfc_daemon_call_get_all6(daemon, NULL,
+                nfc_daemon_client_daemon_get_all6_done, g_object_ref(self));
+        } else if (iface_version >= 4) {
             org_sailfishos_nfc_daemon_call_get_all4(daemon, NULL,
                 nfc_daemon_client_daemon_get_all4_done, g_object_ref(self));
         } else if (iface_version == 3) {
@@ -651,6 +720,9 @@ nfc_daemon_client_new_daemon(
         self->change_signal_id[CHANGE_TECHS_CHANGED] =
             g_signal_connect(daemon, "techs-changed",
                 G_CALLBACK(nfc_daemon_client_daemon_techs_changed), self);
+        self->change_signal_id[CHANGE_BLOCKED_CHANGED] =
+            g_signal_connect(daemon, "blocked-changed",
+                G_CALLBACK(nfc_daemon_client_daemon_blocked_changed), self);
         org_sailfishos_nfc_daemon_call_get_all(daemon, NULL,
             nfc_daemon_client_daemon_get_all_done, g_object_ref(self));
     } else {

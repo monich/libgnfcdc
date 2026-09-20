@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019-2024 Slava Monich <slava@monich.com>
+ * Copyright (C) 2019-2026 Slava Monich <slava@monich.com>
  * Copyright (C) 2019-2022 Jolla Ltd.
  *
  * You may use this file under the terms of the BSD license as follows:
@@ -59,6 +59,8 @@ typedef enum nfc_daemon_property {
     NFC_DAEMON_PROPERTY_MODE,
     /* Since 1.1.0 */
     NFC_DAEMON_PROPERTY_TECHS,
+    /* Since 1.2.3 */
+    NFC_DAEMON_PROPERTY_BLOCKED,
     NFC_DAEMON_PROPERTY_COUNT /* Moving target */
 } NFC_DAEMON_PROPERTY;
 
@@ -74,6 +76,8 @@ struct nfc_daemon_client {
     NFC_MODE mode; /* Zero for nfcd versions < 1.2.0 */
     /* Since 1.1.0 */
     NFC_TECH techs; /* Zero for nfcd versions < 1.2.0 */
+    /* Since 1.2.3 */
+    gboolean blocked; /* Requires nfcd >= 1.2.7 */
 };
 
 #define NFC_DAEMON_VERSION(v1,v2,v3) \
